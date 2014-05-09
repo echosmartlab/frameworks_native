@@ -45,10 +45,25 @@
 
 #include "../Layer.h"           // needed only for debugging
 #include "../SurfaceFlinger.h"
+#if defined(BOARD_USES_HDMI)
+#include "SecHdmiClient.h"
+#include "SecTVOutService.h"
+
+#include "SecHdmi.h"
+#endif
+
+
+#define NO_FENCE_SYNC   //wjj, merge from KH for JLB4.2 with no fence kernel. 2013.04.28
+
+#if defined(NO_FENCE_SYNC)
+unsigned int flag_fbPost_called = 0;
+unsigned int flag_commit_called = 0;
+#endif
 
 namespace android {
 
 #define MIN_HWC_HEADER_VERSION HWC_HEADER_VERSION
+#define EXYNOS_4412_NO_ION //Don't open FB here, because hwc 1.1 will open FB itself. by wjj 130131
 
 static uint32_t hwcApiVersion(const hwc_composer_device_1_t* hwc) {
     uint32_t hwcVersion = hwc->common.version;
@@ -104,9 +119,18 @@ HWComposer::HWComposer(
 
     bool needVSyncThread = true;
 
+#ifdef EXYNOS_4412_NO_ION
+    // Note: some devices may insist that the FB HAL be opened before HWC.
+
+    int fberr = 0;
+    mFbDev = NULL;
+    loadHwcModule();
+#else
     // Note: some devices may insist that the FB HAL be opened before HWC.
     int fberr = loadFbHalModule();
     loadHwcModule();
+
+
 
     if (mFbDev && mHwc && hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_1)) {
         // close FB HAL if we don't needed it.
@@ -116,6 +140,7 @@ HWComposer::HWComposer(
         mFbDev = NULL;
     }
 
+#endif
     // If we have no HWC, or a pre-1.1 HWC, an FB dev is mandatory.
     if ((!mHwc || !hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_1))
             && !mFbDev) {
@@ -146,7 +171,9 @@ HWComposer::HWComposer(
         }
 
         // don't need a vsync thread if we have a hardware composer
-        needVSyncThread = false;
+        // 4412 Kernel 3.0 doesn't implement hw vsync, so use sw vsync here. by wjj
+        needVSyncThread = true; //false;
+        
         // always turn vsync off when we start
         eventControl(HWC_DISPLAY_PRIMARY, HWC_EVENT_VSYNC, 0);
 
@@ -658,6 +685,10 @@ status_t HWComposer::prepare() {
             }
         }
     }
+#if defined(NO_FENCE_SYNC)
+    flag_fbPost_called = 0;
+    flag_commit_called = 0;
+#endif	
     return (status_t)err;
 }
 
@@ -709,8 +740,19 @@ status_t HWComposer::commit() {
             }
         }
 
+#if defined(NO_FENCE_SYNC)
+        int retrycount = 17;
+        while ((hasGlesComposition(DisplayDevice::DISPLAY_PRIMARY)) &&
+               (flag_fbPost_called == flag_commit_called) && (--retrycount >= 0)) {
+            usleep(1000);
+            ALOGV("commit() waits fbPost() retrycount = %d", retrycount);
+        }
+#endif
         err = mHwc->set(mHwc, mNumDisplays, mLists);
-
+#if defined(NO_FENCE_SYNC)
+        if (hasGlesComposition(DisplayDevice::DISPLAY_PRIMARY))
+            flag_commit_called++;
+#endif
         for (size_t i=0 ; i<mNumDisplays ; i++) {
             DisplayData& disp(mDisplayData[i]);
             disp.lastDisplayFence = disp.lastRetireFence;
@@ -762,7 +804,7 @@ int HWComposer::getVisualID() const {
         // FIXME: temporary hack until HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED
         // is supported by the implementation. we can only be in this case
         // if we have HWC 1.1
-        return HAL_PIXEL_FORMAT_RGBA_8888;
+        return HAL_PIXEL_FORMAT_BGRA_8888; //HAL_PIXEL_FORMAT_RGBA_8888;
         //return HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED;
     } else {
         return mFbDev->format;
@@ -775,8 +817,33 @@ bool HWComposer::supportsFramebufferTarget() const {
 
 int HWComposer::fbPost(int32_t id,
         const sp<Fence>& acquireFence, const sp<GraphicBuffer>& buffer) {
+        android::SecHdmiClient *mHdmiClient = android::SecHdmiClient::getInstance();
     if (mHwc && hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_1)) {
+#if defined(NO_FENCE_SYNC)
+        int ret = setFramebufferTarget(id, acquireFence, buffer);
+        if (hasGlesComposition(DisplayDevice::DISPLAY_PRIMARY))
+            flag_fbPost_called++;
+
+#if defined(BOARD_USES_HDMI)
+                   if (mHdmiClient != NULL)
+                       {
+                       //ALOGE("----------before------self->mHdmiClient->blit2Hdmi");
+    	#ifdef SUPPORT_AUTO_UI_ROTATE
+                       mHdmiClient->setHdmiRotate(0,0); //added yqf, test 12-3-19 
+    	#endif
+                       mHdmiClient->blit2Hdmi(getWidth(id), getHeight(id),
+                                                   HAL_PIXEL_FORMAT_BGRA_8888,
+                                                   0, 0, 0,
+                                                   0, 0,
+                                                   android::SecHdmiClient::HDMI_MODE_UI,
+                                                   0);
+                       }
+#endif
+
+        return ret;
+#else
         return setFramebufferTarget(id, acquireFence, buffer);
+#endif
     } else {
         acquireFence->waitForever("HWComposer::fbPost");
         return mFbDev->post(mFbDev, buffer->handle);

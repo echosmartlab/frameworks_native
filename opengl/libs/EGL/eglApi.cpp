@@ -397,6 +397,11 @@ static int modifyFormatColorspace(int fmt, EGLint colorspace) {
     return fmt;
 }
 
+/* wjj, must define WA for setting FB target format as Visual ID */
+#ifndef WORKAROUND_BUG_10194508
+#define WORKAROUND_BUG_10194508 1
+#endif
+
 EGLSurface eglCreateWindowSurface(  EGLDisplay dpy, EGLConfig config,
                                     NativeWindowType window,
                                     const EGLint *attrib_list)

@@ -98,6 +98,14 @@ LOCAL_SHARED_LIBRARIES := \
 	libui \
 	libgui
 
+ifeq ($(BOARD_USES_HDMI),true)
+	LOCAL_CFLAGS += -DBOARD_USES_HDMI
+	LOCAL_SHARED_LIBRARIES += libTVOut
+	LOCAL_SHARED_LIBRARIES += libhdmiclient  #yqf added #
+	LOCAL_C_INCLUDES += hardware/samsung_slsi/$(TARGET_BOARD_PLATFORM)/libhdmi/libhdmiservice
+	LOCAL_C_INCLUDES += hardware/samsung_slsi/$(TARGET_BOARD_PLATFORM)/include
+endif
+
 LOCAL_MODULE:= libsurfaceflinger
 
 include $(BUILD_SHARED_LIBRARY)
