@@ -48,6 +48,9 @@ endif
 ifeq ($(TARGET_BOARD_PLATFORM), tegra3)
 	LOCAL_CFLAGS += -DDONT_USE_FENCE_SYNC
 endif
+ifeq ($(TARGET_SOC),exynos5410)
+        LOCAL_CFLAGS += -DUSES_PVR_GPU
+endif
 
 include $(BUILD_SHARED_LIBRARY)
 

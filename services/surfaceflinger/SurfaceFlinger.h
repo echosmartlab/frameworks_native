@@ -199,10 +199,17 @@ private:
     virtual bool authenticateSurfaceTexture(
         const sp<IGraphicBufferProducer>& bufferProducer) const;
     virtual sp<IDisplayEventConnection> createDisplayEventConnection();
+#ifdef USES_PVR_GPU
+    virtual status_t captureScreen(const sp<IBinder>& display,
+            const sp<IGraphicBufferProducer>& producer,
+            uint32_t reqWidth, uint32_t reqHeight,
+            uint32_t minLayerZ, uint32_t maxLayerZ, bool isCpuConsumer);
+#else
     virtual status_t captureScreen(const sp<IBinder>& display,
             const sp<IGraphicBufferProducer>& producer,
             uint32_t reqWidth, uint32_t reqHeight,
             uint32_t minLayerZ, uint32_t maxLayerZ);
+#endif
     // called when screen needs to turn off
     virtual void blank(const sp<IBinder>& display);
     // called when screen is turning back on
@@ -308,11 +315,20 @@ private:
             uint32_t minLayerZ, uint32_t maxLayerZ,
             bool yswap);
 
+#ifdef USES_PVR_GPU
+    status_t captureScreenImplLocked(
+            const sp<const DisplayDevice>& hw,
+            const sp<IGraphicBufferProducer>& producer,
+            uint32_t reqWidth, uint32_t reqHeight,
+            uint32_t minLayerZ, uint32_t maxLayerZ,
+            bool useReadPixels);
+#else
     status_t captureScreenImplLocked(
             const sp<const DisplayDevice>& hw,
             const sp<IGraphicBufferProducer>& producer,
             uint32_t reqWidth, uint32_t reqHeight,
             uint32_t minLayerZ, uint32_t maxLayerZ);
+#endif
 
     /* ------------------------------------------------------------------------
      * EGL

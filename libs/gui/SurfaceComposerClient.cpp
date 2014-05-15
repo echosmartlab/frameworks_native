@@ -626,8 +626,14 @@ status_t ScreenshotClient::capture(
         uint32_t minLayerZ, uint32_t maxLayerZ) {
     sp<ISurfaceComposer> s(ComposerService::getComposerService());
     if (s == NULL) return NO_INIT;
+#ifdef USES_PVR_GPU
+    return s->captureScreen(display, producer,
+            reqWidth, reqHeight, minLayerZ, maxLayerZ,
+            false);
+#else
     return s->captureScreen(display, producer,
             reqWidth, reqHeight, minLayerZ, maxLayerZ);
+#endif
 }
 
 ScreenshotClient::ScreenshotClient()
@@ -661,8 +667,13 @@ status_t ScreenshotClient::update(const sp<IBinder>& display,
         mHaveBuffer = false;
     }
 
+#ifdef USES_PVR_GPU
+    status_t err = s->captureScreen(display, mBufferQueue,
+            reqWidth, reqHeight, minLayerZ, maxLayerZ, true);
+#else
     status_t err = s->captureScreen(display, mBufferQueue,
             reqWidth, reqHeight, minLayerZ, maxLayerZ);
+#endif
 
     if (err == NO_ERROR) {
         err = mCpuConsumer->lockNextBuffer(&mBuffer);

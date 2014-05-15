@@ -62,6 +62,19 @@ endif
 ifneq ($(MAX_EGL_CACHE_SIZE),)
   LOCAL_CFLAGS += -DMAX_EGL_CACHE_SIZE=$(MAX_EGL_CACHE_SIZE)
 endif
+ifeq ($(TARGET_SOC),exynos5410)
+        LOCAL_CFLAGS += -DUSES_PVR_GPU
+        LOCAL_CFLAGS += -DSYSTEMUI_PBSIZE_HACK=1
+        LOCAL_CFLAGS += -DWORKAROUND_BUG_10194508=1
+endif
+
+ifeq ($(BOARD_USE_BGRA_8888), true)
+  LOCAL_CFLAGS += -DUSE_BGRA_8888=1
+endif
+
+ifeq ($(BOARD_USE_BGRX_8888), true)
+  LOCAL_CFLAGS += -DUSE_BGRX_8888=1
+endif
 
 LOCAL_REQUIRED_MODULES := $(egl.cfg_config_module)
 egl.cfg_config_module :=

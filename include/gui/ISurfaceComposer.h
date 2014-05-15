@@ -120,7 +120,11 @@ public:
     virtual status_t captureScreen(const sp<IBinder>& display,
             const sp<IGraphicBufferProducer>& producer,
             uint32_t reqWidth, uint32_t reqHeight,
-            uint32_t minLayerZ, uint32_t maxLayerZ) = 0;
+            uint32_t minLayerZ, uint32_t maxLayerZ
+#ifdef USES_PVR_GPU
+            , bool isCpuConsumer
+#endif
+            ) = 0;
 };
 
 // ----------------------------------------------------------------------------

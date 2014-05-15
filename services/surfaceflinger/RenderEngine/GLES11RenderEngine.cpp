@@ -184,6 +184,39 @@ void GLES11RenderEngine::disableBlending() {
     glDisable(GL_BLEND);
 }
 
+#ifdef USES_PVR_GPU
+void GLES11RenderEngine::bindImageAsFramebuffer(EGLImageKHR image,
+        uint32_t* texName, uint32_t* fbName, uint32_t* status,
+        bool useReadPixels, int reqWidth, int reqHeight) {
+    GLuint tname, name;
+    if (!useReadPixels) {
+        // turn our EGLImage into a texture
+        glGenTextures(1, &tname);
+        glBindTexture(GL_TEXTURE_2D, tname);
+        glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, (GLeglImageOES)image);
+
+        // create a Framebuffer Object to render into
+        glGenFramebuffersOES(1, &name);
+        glBindFramebufferOES(GL_FRAMEBUFFER_OES, name);
+        glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES,
+                GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, tname, 0);
+    } else {
+        // since we're going to use glReadPixels() anyways,
+        // use an intermediate renderbuffer instead
+        glGenRenderbuffersOES(1, &tname);
+        glBindRenderbufferOES(GL_RENDERBUFFER_OES, tname);
+        glRenderbufferStorageOES(GL_RENDERBUFFER_OES, GL_RGBA8_OES, reqWidth, reqHeight);
+        // create a FBO to render into
+        glGenFramebuffersOES(1, &name);
+        glBindFramebufferOES(GL_FRAMEBUFFER_OES, name);
+        glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_RENDERBUFFER_OES, tname);
+    }
+
+    *status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES);
+    *texName = tname;
+    *fbName = name;
+}
+#else
 void GLES11RenderEngine::bindImageAsFramebuffer(EGLImageKHR image,
         uint32_t* texName, uint32_t* fbName, uint32_t* status) {
     GLuint tname, name;
@@ -202,12 +235,25 @@ void GLES11RenderEngine::bindImageAsFramebuffer(EGLImageKHR image,
     *texName = tname;
     *fbName = name;
 }
+#endif
 
+#ifdef USES_PVR_GPU
+void GLES11RenderEngine::unbindFramebuffer(uint32_t texName, uint32_t fbName,
+        bool useReadPixels) {
+    glBindFramebufferOES(GL_FRAMEBUFFER_OES, 0);
+    glDeleteFramebuffersOES(1, &fbName);
+    if (!useReadPixels)
+        glDeleteTextures(1, &texName);
+    else
+        glDeleteRenderbuffersOES(1, &texName);
+}
+#else
 void GLES11RenderEngine::unbindFramebuffer(uint32_t texName, uint32_t fbName) {
     glBindFramebufferOES(GL_FRAMEBUFFER_OES, 0);
     glDeleteFramebuffersOES(1, &fbName);
     glDeleteTextures(1, &texName);
 }
+#endif
 
 void GLES11RenderEngine::setupFillWithColor(float r, float g, float b, float a) {
     glColor4f(r, g, b, a);
