@@ -62,6 +62,9 @@
 
 #include <private/android_filesystem_config.h>
 #include <private/gui/SharedBufferStack.h>
+#if defined(BOARD_USES_HDMI)
+#include "SecTVOutService.h"
+#endif
 #include <gui/BitTube.h>
 
 #define EGL_VERSION_HW_ANDROID  0x3143
@@ -99,6 +102,12 @@ SurfaceFlinger::SurfaceFlinger()
         mSecureFrameBuffer(0)
 {
     init();
+
+#if defined(BOARD_USES_HDMI)
+    ALOGD(">>> Run service");
+    android::SecTVOutService::instantiate();
+#endif
+
 }
 
 void SurfaceFlinger::init()
@@ -2759,6 +2768,24 @@ status_t GraphicPlane::setOrientation(int orientation)
 
     mOrientation = orientation;
     mGlobalTransform = mDisplayTransform * orientationTransform;
+
+{ //added yqf  
+   android::SecHdmiClient  *mHdmiClient;
+   mHdmiClient=android::SecHdmiClient::getInstance();
+   
+   uint32_t rot=mGlobalTransform.getOrientation();
+   //ALOGE("GraphicPlane::setOrientation, rot:%d \n",rot);
+   
+    if (rot == HAL_TRANSFORM_ROT_90 )//added yqf for test
+        mHdmiClient->saveHdmiRotate(90);
+    else if(rot == HAL_TRANSFORM_ROT_270)
+        mHdmiClient->saveHdmiRotate(270);
+    else if(rot == HAL_TRANSFORM_ROT_180)  
+        mHdmiClient->saveHdmiRotate(180); 
+    else 
+	mHdmiClient->saveHdmiRotate(0);
+}
+
     return NO_ERROR;
 }
 

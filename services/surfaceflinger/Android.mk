@@ -52,6 +52,13 @@ ifneq ($(TARGET_BUILD_PDK), true)
 	LOCAL_CLFAGS += -DDDMS_DEBUGGING
 	LOCAL_SRC_FILES += DdmConnection.cpp
 endif
+ifeq ($(BOARD_USES_HDMI),true)
+	LOCAL_CFLAGS += -DBOARD_USES_HDMI
+	LOCAL_SHARED_LIBRARIES += libTVOut
+	LOCAL_SHARED_LIBRARIES += libhdmiclient  #yqf added #
+	LOCAL_C_INCLUDES += device/samsung/$(TARGET_BOARD_PLATFORM)/libhdmi/libhdmiservice
+	LOCAL_C_INCLUDES += device/samsung/$(TARGET_BOARD_PLATFORM)/include
+endif
 
 LOCAL_MODULE:= libsurfaceflinger
 

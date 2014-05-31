@@ -21,6 +21,8 @@
 #include <utils/Errors.h>
 #include <utils/Log.h>
 
+#include <cutils/properties.h>
+
 #include <ui/GraphicBuffer.h>
 
 #include "LayerScreenshot.h"
@@ -70,10 +72,55 @@ void LayerScreenshot::initTexture(GLfloat u, GLfloat v) {
     glBindTexture(GL_TEXTURE_2D, mTextureName);
     glTexParameterx(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameterx(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    mTexCoords[0] = 0;         mTexCoords[1] = v;
-    mTexCoords[2] = 0;         mTexCoords[3] = 0;
-    mTexCoords[4] = u;         mTexCoords[5] = 0;
-    mTexCoords[6] = u;         mTexCoords[7] = v;
+
+    //JMQ.Fix the screen rotation problem when hareware rotation value is not 0. 
+    //Using different value to handle the hardware rotation here.
+    char property[PROPERTY_VALUE_MAX];    //Get system property ro.sf.hwrotation
+    int hwrotation = 0;
+    if (property_get("ro.sf.hwrotation", property, NULL) > 0) {
+        
+        switch (atoi(property)) {
+        case 90:
+            hwrotation = 90;
+            break;
+        case 180:
+	     hwrotation = 180;
+            break;
+        case 270:
+	     hwrotation = 270;
+            break;
+	 default:
+	     hwrotation = 0;
+	     break;
+        }
+    }
+    switch(hwrotation)
+    {
+        case 90:
+            mTexCoords[0] = u;         mTexCoords[1] = v;
+            mTexCoords[2] = 0;         mTexCoords[3] = v;
+            mTexCoords[4] = 0;         mTexCoords[5] = 0;
+            mTexCoords[6] = u;         mTexCoords[7] = 0;
+            break;
+        case 180:
+            mTexCoords[0] = u;         mTexCoords[1] = 0;
+            mTexCoords[2] = u;         mTexCoords[3] = v;
+            mTexCoords[4] = 0;         mTexCoords[5] = v;
+            mTexCoords[6] = 0;         mTexCoords[7] = 0;
+            break;
+        case 270:
+            mTexCoords[0] = 0;         mTexCoords[1] = 0;
+            mTexCoords[2] = u;         mTexCoords[3] = 0;
+            mTexCoords[4] = u;         mTexCoords[5] = v;
+            mTexCoords[6] = 0;         mTexCoords[7] = v;
+            break;
+        default:    	 //case 0://default one,			
+            mTexCoords[0] = 0;         mTexCoords[1] = v;
+            mTexCoords[2] = 0;         mTexCoords[3] = 0;
+            mTexCoords[4] = u;         mTexCoords[5] = 0;
+            mTexCoords[6] = u;         mTexCoords[7] = v;
+            break;
+    	}
 }
 
 void LayerScreenshot::initStates(uint32_t w, uint32_t h, uint32_t flags) {

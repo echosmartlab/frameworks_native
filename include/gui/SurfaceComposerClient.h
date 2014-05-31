@@ -156,7 +156,8 @@ public:
     status_t update(uint32_t reqWidth, uint32_t reqHeight);
     status_t update(uint32_t reqWidth, uint32_t reqHeight,
             uint32_t minLayerZ, uint32_t maxLayerZ);
-
+    status_t updateinternal(uint32_t reqWidth, uint32_t reqHeight,
+            uint32_t minLayerZ, uint32_t maxLayerZ);
     // release memory occupied by the screenshot
     void release();
 

@@ -25,6 +25,7 @@
 #include <utils/SortedVector.h>
 #include <utils/String8.h>
 #include <utils/threads.h>
+#include <cutils/properties.h>
 
 #include <binder/IMemory.h>
 #include <binder/IServiceManager.h>
@@ -560,6 +561,61 @@ ScreenshotClient::ScreenshotClient()
     : mWidth(0), mHeight(0), mFormat(PIXEL_FORMAT_NONE) {
 }
 
+template<typename T>
+static void rotate0(T* dst, const T* src, size_t width, size_t height)
+{
+    memcpy(dst, src, width * height * sizeof(T));
+}
+
+template<typename T>
+static void rotate90(T* dst, const T* src, size_t width, size_t height)
+{
+    for (size_t i = 0; i < height; ++i) {
+        for (size_t j = 0; j < width; ++j) {
+            dst[j * height + height - 1 - i] = src[i * width + j];
+        }
+    }
+}
+
+template<typename T>
+static void rotate180(T* dst, const T* src, size_t width, size_t height)
+{
+    for (size_t i = 0; i < height; ++i) {
+        for (size_t j = 0; j < width; ++j) {
+            dst[(height - 1 - i) * width + width - 1 - j] = src[i * width + j];
+        }
+    }
+}
+
+template<typename T>
+static void rotate270(T* dst, const T* src, size_t width, size_t height)
+{
+    for (size_t i = 0; i < height; ++i) {
+        for (size_t j = 0; j < width; ++j) {
+            dst[(width - 1 - j) * height + i] = src[i * width + j];
+        }
+    }
+}
+
+template<typename T>
+static void rotate(T *dst, const T *src, size_t width, size_t height, int angle)
+{
+    switch (angle) {
+        case 0:
+            rotate0(dst, src, width, height);
+            break;
+        case 90:
+            rotate90(dst, src, width, height);
+            break;
+        case 180:
+            rotate180(dst, src, width, height);
+            break;
+        case 270:
+            rotate270(dst, src, width, height);
+            break;
+    }
+}
+#if 0
 status_t ScreenshotClient::update() {
     sp<ISurfaceComposer> s(ComposerService::getComposerService());
     if (s == NULL) return NO_INIT;
@@ -587,7 +643,107 @@ status_t ScreenshotClient::update(uint32_t reqWidth, uint32_t reqHeight,
             &mWidth, &mHeight, &mFormat, reqWidth, reqHeight,
             minLayerZ, maxLayerZ);
 }
+#else
+status_t ScreenshotClient::update() {
+    return updateinternal(0, 0, 0, -1UL);
+}
 
+status_t ScreenshotClient::update(uint32_t reqWidth, uint32_t reqHeight) {
+    return updateinternal( reqWidth, reqHeight, 0, -1UL);
+}
+
+status_t ScreenshotClient::update(uint32_t reqWidth, uint32_t reqHeight,
+        uint32_t minLayerZ, uint32_t maxLayerZ) {
+    return updateinternal( reqWidth, reqHeight,minLayerZ, maxLayerZ);
+}
+#endif
+status_t ScreenshotClient::updateinternal(uint32_t reqWidth, uint32_t reqHeight,
+            uint32_t minLayerZ, uint32_t maxLayerZ)
+{
+	status_t rtnstatus = 0;
+
+	char property[PROPERTY_VALUE_MAX];    //Get system property ro.sf.hwrotation
+       int hwrotation = 0;
+	int rotationangle = 0;
+	int * rawdata=NULL;
+	//get hwrotate first
+	if (property_get("ro.sf.hwrotation", property, NULL) > 0) {
+        
+         switch (atoi(property)) {
+         case 90:
+            hwrotation = 90;
+            rotationangle = 270;	 			
+            break;
+         case 180:
+	     hwrotation = 180;
+	     rotationangle = 180;	
+            break;
+         case 270:
+	     hwrotation = 270;
+            rotationangle = 90;	
+            break;
+	  default:
+	     hwrotation = 0;
+	     rotationangle = 0;
+	     break;
+         }
+       }
+	if(hwrotation == 90 ||hwrotation == 270)//jmq.swap w,h, maybe its better to handle in surfaceflinger
+	{
+		uint32_t w =reqWidth;
+		reqWidth = reqHeight;
+		reqHeight = w;
+	}
+	sp<ISurfaceComposer> s(ComposerService::getComposerService());
+       if (s == NULL) return NO_INIT;
+       mHeap = 0;
+	//do capture here
+	rtnstatus = s->captureScreen(0, &mHeap,
+            &mWidth, &mHeight, &mFormat, reqWidth, reqHeight,
+            minLayerZ, maxLayerZ);
+       if(rtnstatus != 0 )
+       {
+            ALOGE("Error return from s->captureScreen, mFormat:0x%x mWidth:0x%x mHeight:0x%x",
+		mFormat,mWidth,mHeight);
+            return rtnstatus;
+       }
+	//Rotate the data here
+
+	ALOGV("updateinternal,mFormat:0x%x mWidth:0x%x mHeight:0x%x",
+		mFormat,mWidth,mHeight);
+	
+	if(mFormat != PIXEL_FORMAT_RGBA_8888)
+	{
+	       ALOGE("The screenshot data format is not PIXEL_FORMAT_RGBA_8888, please check the service end.");
+		return rtnstatus;
+	}
+       
+
+      if(rotationangle == 0)
+      {
+      	    return rtnstatus;//normal case.
+      }
+      rawdata = new int[mWidth*mHeight];//pixel size is 32 bits now
+      //ALOGI("size:%d",mHeap->getSize());
+      memcpy(rawdata,mHeap->getBase(),sizeof(int)*mWidth*mHeight);
+      rotate((int *)mHeap->getBase(),
+           (int *)rawdata,
+           mWidth,
+           mHeight,
+           rotationangle);
+      delete [] rawdata;
+      rawdata=NULL;
+      
+      if(rotationangle == 90 ||rotationangle == 270 )
+      {
+          //swap w,h
+          int tmp =mWidth;
+	   mWidth = mHeight;
+	   mHeight = tmp;
+      }
+
+	return rtnstatus;
+}
 void ScreenshotClient::release() {
     mHeap = 0;
 }

@@ -41,7 +41,9 @@
 #include "Layer.h"
 
 #include "MessageQueue.h"
-
+#if defined(BOARD_USES_HDMI) //yqf test
+#include "SecHdmiClient.h"
+#endif
 namespace android {
 
 // ---------------------------------------------------------------------------

@@ -27,6 +27,9 @@
 
 #include <ui/ANativeObjectBase.h>
 #include <ui/Rect.h>
+#if defined(BOARD_USES_HDMI)
+#include "SecHdmiClient.h"
+#endif
 
 #define NUM_FRAME_BUFFERS  2
 
@@ -38,6 +41,9 @@ namespace android {
 
 class Surface;
 class NativeBuffer;
+#if defined(BOARD_USES_HDMI)
+class SecHdmiClient;
+#endif
 
 // ---------------------------------------------------------------------------
 
@@ -84,6 +90,9 @@ private:
     int32_t mBufferHead;
     int32_t mCurrentBufferIndex;
     bool mUpdateOnDemand;
+#if defined(BOARD_USES_HDMI)
+    SecHdmiClient *mHdmiClient;
+#endif
 };
     
 // ---------------------------------------------------------------------------

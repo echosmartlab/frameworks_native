@@ -75,6 +75,10 @@ FramebufferNativeWindow::FramebufferNativeWindow()
     : BASE(), fbDev(0), grDev(0), mUpdateOnDemand(false)
 {
     hw_module_t const* module;
+#if defined(BOARD_USES_HDMI)
+    //ALOGD("lt::%s::SecHdmiClient::getInstance",__func__); //lt,debug
+    mHdmiClient = android::SecHdmiClient::getInstance();
+#endif
     if (hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module) == 0) {
         int stride;
         int err;
@@ -247,6 +251,7 @@ int FramebufferNativeWindow::lockBuffer(ANativeWindow* window,
     return NO_ERROR;
 }
 
+#define SUPPORT_AUTO_UI_ROTATE  //yqf
 int FramebufferNativeWindow::queueBuffer(ANativeWindow* window, 
         ANativeWindowBuffer* buffer)
 {
@@ -260,6 +265,20 @@ int FramebufferNativeWindow::queueBuffer(ANativeWindow* window,
     self->front = static_cast<NativeBuffer*>(buffer);
     self->mNumFreeBuffers++;
     self->mCondition.broadcast();
+#if defined(BOARD_USES_HDMI)
+    if (self->mHdmiClient != NULL)
+    	{
+    	#ifdef SUPPORT_AUTO_UI_ROTATE
+   	    self->mHdmiClient->setHdmiRotate(0,0); //added yqf, test 12-3-19 
+    	#endif
+        self->mHdmiClient->blit2Hdmi(buffer->width, buffer->height,
+                                    HAL_PIXEL_FORMAT_BGRA_8888,
+                                    0, 0, 0,
+                                    0, 0,
+                                    android::SecHdmiClient::HDMI_MODE_UI,
+                                    0);
+    	}
+#endif
     return res;
 }
 

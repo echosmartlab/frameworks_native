@@ -95,5 +95,19 @@ status_t GraphicBufferMapper::unlock(buffer_handle_t handle)
     return err;
 }
 
+status_t GraphicBufferMapper::getphys(buffer_handle_t handle, void** vaddr)
+{
+    status_t err;
+
+#if !defined(VITHAR_HACK)
+    err = mAllocMod->getphys(mAllocMod, handle, vaddr);
+
+#else
+    ALOGI("There is no function in Vithar");
+#endif
+    ALOGW_IF(err, "lock(...) failed %d (%s)", err, strerror(-err));
+    return err;
+}
+
 // ---------------------------------------------------------------------------
 }; // namespace android

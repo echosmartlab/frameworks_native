@@ -87,6 +87,9 @@ HWComposer::HWComposer(
         needVSyncThread = true;
     }
 
+    if(mDebugForceFakeVSync)
+        needVSyncThread = true;
+
     if (needVSyncThread) {
         // we don't have VSYNC support, we need to fake it
         mVSyncThread = new VSyncThread(*this);
