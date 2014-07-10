@@ -68,6 +68,9 @@
 #include "DisplayHardware/GraphicBufferAlloc.h"
 #include "DisplayHardware/HWComposer.h"
 
+#if defined(PRESENTATION_SUBTITLES) || defined(HWC_SERVICES)
+#include "ExynosHWCService.h"
+#endif
 
 #define EGL_VERSION_HW_ANDROID  0x3143
 
@@ -883,6 +886,11 @@ void SurfaceFlinger::rebuildLayerStacks() {
         invalidateHwcGeometry();
 
         const LayerVector& currentLayers(mDrawingState.layersSortedByZ);
+#if defined(PRESENTATION_SUBTITLES)
+        int numMainExtDispLayers = 0;
+        int numHdmiExtDispLayers = 0;
+        int extDispLayerIndex;
+#endif
         for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
             Region opaqueRegion;
             Region dirtyRegion;
@@ -898,6 +906,24 @@ void SurfaceFlinger::rebuildLayerStacks() {
                 for (size_t i=0 ; i<count ; i++) {
                     const sp<LayerBase>& layer(currentLayers[i]);
                     const Layer::State& s(layer->drawingState());
+#if defined(PRESENTATION_SUBTITLES)
+                    int flags = 0;
+                    sp<Layer> l = layer->getLayer();
+                    sp<GraphicBuffer> gb = NULL;
+                    if (l != NULL)
+                        gb = layer->getLayer()->getActiveBuffer();
+                    if (gb != NULL)
+                        flags = gb->getUsage();
+                    if (flags & GRALLOC_USAGE_EXTERNAL_DISP) {
+                        if (dpy == DisplayDevice::DISPLAY_PRIMARY &&
+                                s.layerStack == hw->getLayerStack())
+                            numMainExtDispLayers++;
+                        if (dpy == DisplayDevice::DISPLAY_EXTERNAL &&
+                                s.layerStack == hw->getLayerStack())
+                            numHdmiExtDispLayers++;
+                        extDispLayerIndex = i;
+                    }
+#endif
                     if (s.layerStack == hw->getLayerStack()) {
                         Region drawRegion(tr.transform(
                                 layer->visibleNonTransparentRegion));
@@ -907,6 +933,34 @@ void SurfaceFlinger::rebuildLayerStacks() {
                         }
                     }
                 }
+#if defined(PRESENTATION_SUBTITLES)
+                /* Get HWC service */
+                sp<IServiceManager> sm = defaultServiceManager();
+                sp<IExynosHWCService> hwc =
+                    interface_cast<android::IExynosHWCService>(sm->getService(String16("Exynos.HWCService")));
+                if (hw->getLayerStack() != 0 &&
+                        dpy == DisplayDevice::DISPLAY_EXTERNAL &&
+                        numHdmiExtDispLayers == 0 && numMainExtDispLayers == 1) {
+                    /* Push LCD video layer into HDMI layerStack */
+                    const sp<LayerBase> &layer(currentLayers[extDispLayerIndex]);
+                    Region drawRegion(tr.transform(layer->visibleNonTransparentRegion));
+                    Rect r = drawRegion.getBounds();
+                    drawRegion.andSelf(bounds);
+                    if (!drawRegion.isEmpty())
+                        layersSortedByZ.add(layer);
+
+                    /* Force Mirror Mode for G3D rendering */
+                    if (hwc != NULL)
+                        hwc->setHdmiSubtitles(true);
+                    else
+                        ALOGE("Exynos.HWCService is unavailable");
+                } else {
+                    if (hwc != NULL)
+                        hwc->setHdmiSubtitles(false);
+                    else
+                        ALOGE("Exynos.HWCService is unavailable");
+                }
+#endif
             }
             hw->setVisibleLayersSortedByZ(layersSortedByZ);
             hw->undefinedRegion.set(bounds);
@@ -934,6 +988,21 @@ void SurfaceFlinger::setUpHWComposer() {
                         const HWComposer::LayerListIterator end = hwc.end(id);
                         for (size_t i=0 ; cur!=end && i<count ; ++i, ++cur) {
                             const sp<LayerBase>& layer(currentLayers[i]);
+#if defined(HWC_SERVICES)
+                            sp<IServiceManager> sm = defaultServiceManager();
+                            sp<IExynosHWCService> hwcService =
+                                interface_cast<android::IExynosHWCService>(sm->getService(String16("Exynos.HWCService")));
+                            if (hwcService != NULL) {
+                                if (dpy == DisplayDevice::DISPLAY_EXTERNAL &&
+                                    hw->getLayerStack() != 0) {
+                                    if (!hwcService->getPresentationMode())
+                                        hwcService->setPresentationMode(true);
+                                } else {
+                                    if (hwcService->getPresentationMode())
+                                        hwcService->setPresentationMode(false);
+                                }
+                            }
+#endif
                             layer->setGeometry(hw, *cur);
                             if (mDebugDisableHWC || mDebugRegion) {
                                 cur->setSkip(true);
@@ -1352,7 +1421,6 @@ void SurfaceFlinger::computeVisibleRegions(
          * SurfaceView restrictions (which, sadly, some don't).
          */
         Region transparentRegion;
-
 
         // handle hidden surfaces by setting the visible region to empty
         if (CC_LIKELY(layer->isVisible())) {
@@ -2627,6 +2695,7 @@ status_t SurfaceFlinger::renderScreenToTextureLocked(uint32_t layerStack,
     const size_t count = layers.size();
     for (size_t i=0 ; i<count ; ++i) {
         const sp<LayerBase>& layer(layers[i]);
+
         layer->draw(hw);
     }
 

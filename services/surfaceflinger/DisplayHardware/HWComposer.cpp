@@ -46,6 +46,11 @@
 #include "SurfaceFlinger.h"
 #include <utils/CallStack.h>
 
+#if defined(NO_FENCE_SYNC)
+unsigned int flag_fbPost_called = 0;
+unsigned int flag_commit_called = 0;
+#endif
+
 namespace android {
 
 #define MIN_HWC_HEADER_VERSION 0
@@ -617,6 +622,10 @@ status_t HWComposer::prepare() {
             }
         }
     }
+#if defined(NO_FENCE_SYNC)
+    flag_fbPost_called = 0;
+    flag_commit_called = 0;
+#endif
     return (status_t)err;
 }
 
@@ -659,7 +668,21 @@ status_t HWComposer::commit() {
             mLists[0]->sur = eglGetCurrentSurface(EGL_DRAW);
         }
 
+#if defined(NO_FENCE_SYNC)
+        int retrycount = 17;
+        while ((hasGlesComposition(DisplayDevice::DISPLAY_PRIMARY)) &&
+               (flag_fbPost_called == flag_commit_called) && (--retrycount >= 0)) {
+            usleep(1000);
+            ALOGD("commit() waits fbPost() retrycount = %d", retrycount);
+        }
+#endif
+
         err = mHwc->set(mHwc, mNumDisplays, mLists);
+
+#if defined(NO_FENCE_SYNC)
+        if (hasGlesComposition(DisplayDevice::DISPLAY_PRIMARY))
+            flag_commit_called++;
+#endif
 
         for (size_t i=0 ; i<mNumDisplays ; i++) {
             DisplayData& disp(mDisplayData[i]);
@@ -712,7 +735,11 @@ int HWComposer::getVisualID() const {
         // FIXME: temporary hack until HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED
         // is supported by the implementation. we can only be in this case
         // if we have HWC 1.1
+#ifdef USE_BGRA_8888
+        return HAL_PIXEL_FORMAT_BGRA_8888;
+#else
         return HAL_PIXEL_FORMAT_RGBA_8888;
+#endif
         //return HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED;
     } else {
         return mFbDev->format;
@@ -726,7 +753,14 @@ bool HWComposer::supportsFramebufferTarget() const {
 int HWComposer::fbPost(int32_t id,
         const sp<Fence>& acquireFence, const sp<GraphicBuffer>& buffer) {
     if (mHwc && hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_1)) {
+#if defined(NO_FENCE_SYNC)
+        int ret = setFramebufferTarget(id, acquireFence, buffer);
+        if (hasGlesComposition(DisplayDevice::DISPLAY_PRIMARY))
+            flag_fbPost_called++;
+        return ret;
+#else
         return setFramebufferTarget(id, acquireFence, buffer);
+#endif
     } else {
         if (acquireFence != NULL) {
             acquireFence->waitForever(1000, "HWComposer::fbPost");

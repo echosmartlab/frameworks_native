@@ -38,7 +38,9 @@ status_t SurfaceTextureLayer::connect(int api, QueueBufferOutput* output) {
     status_t err = BufferQueue::connect(api, output);
     if (err == NO_ERROR) {
         switch(api) {
+#ifndef SYNC_MODE_FOR_MEDIA
             case NATIVE_WINDOW_API_MEDIA:
+#endif
             case NATIVE_WINDOW_API_CAMERA:
                 // Camera preview and videos are rate-limited on the producer
                 // side.  If enabled for this build, we use async mode to always
