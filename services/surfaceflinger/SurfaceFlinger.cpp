@@ -75,6 +75,10 @@
 #include "RenderEngine/RenderEngine.h"
 #include <cutils/compiler.h>
 
+#if defined(USES_VIRTUAL_DISPLAY) || defined(HDMI_ENABLED) || defined(USES_HWC_SERVICES)
+#include "ExynosHWCService.h"
+#endif
+
 #define DISPLAY_COUNT       1
 
 /*
@@ -128,6 +132,10 @@ const String16 sReadFramebuffer("android.permission.READ_FRAME_BUFFER");
 const String16 sDump("android.permission.DUMP");
 
 // ---------------------------------------------------------------------------
+
+#if defined(USES_HWC_SERVICES)
+static bool notifyPSRExit = true;
+#endif
 
 SurfaceFlinger::SurfaceFlinger()
     :   BnSurfaceComposer(),
@@ -300,6 +308,12 @@ void SurfaceFlinger::bootFinished()
     // formerly we would just kill the process, but we now ask it to exit so it
     // can choose where to stop the animation.
     property_set("service.bootanim.exit", "1");
+#if defined(HDMI_ENABLED)
+    sp<IServiceManager> sm = defaultServiceManager();
+    sp<android::IExynosHWCService> hwc = interface_cast<android::IExynosHWCService>(sm->getService(String16("Exynos.HWCService")));
+    ALOGD("boot finished. Inform HWC");
+    hwc->setBootFinished();
+#endif
 }
 
 void SurfaceFlinger::deleteTextureAsync(uint32_t texture) {
@@ -744,6 +758,18 @@ void SurfaceFlinger::signalTransaction() {
 }
 
 void SurfaceFlinger::signalLayerUpdate() {
+#ifdef USES_HWC_SERVICES
+    if (notifyPSRExit) {
+        notifyPSRExit = false;
+        sp<IServiceManager> sm = defaultServiceManager();
+        sp<IExynosHWCService> hwcService =
+            interface_cast<android::IExynosHWCService>(sm->getService(String16("Exynos.HWCService")));
+        if (hwcService != NULL)
+            hwcService->notifyPSRExit();
+        else
+            ALOGE("HWCService::notifyPSRExit failed");
+    }
+#endif
     mEventQueue.invalidate();
 }
 
@@ -900,6 +926,9 @@ void SurfaceFlinger::handleMessageRefresh() {
     doDebugFlashRegions();
     doComposition();
     postComposition();
+#ifdef USES_HWC_SERVICES
+    notifyPSRExit = true;
+#endif
 }
 
 void SurfaceFlinger::doDebugFlashRegions()
@@ -1004,7 +1033,9 @@ void SurfaceFlinger::rebuildLayerStacks() {
         ATRACE_CALL();
         mVisibleRegionsDirty = false;
         invalidateHwcGeometry();
-
+#ifdef USES_VIRTUAL_DISPLAY
+        uint32_t multiple_layerStack = 0;
+#endif
         const LayerVector& layers(mDrawingState.layersSortedByZ);
         for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
             Region opaqueRegion;
@@ -1013,6 +1044,10 @@ void SurfaceFlinger::rebuildLayerStacks() {
             const sp<DisplayDevice>& hw(mDisplays[dpy]);
             const Transform& tr(hw->getTransform());
             const Rect bounds(hw->getBounds());
+#ifdef USES_VIRTUAL_DISPLAY
+            if (hw->getLayerStack() != 0)
+                multiple_layerStack = 1;
+#endif
             if (hw->canDraw()) {
                 SurfaceFlinger::computeVisibleRegions(layers,
                         hw->getLayerStack(), dirtyRegion, opaqueRegion);
@@ -1036,6 +1071,18 @@ void SurfaceFlinger::rebuildLayerStacks() {
             hw->undefinedRegion.subtractSelf(tr.transform(opaqueRegion));
             hw->dirtyRegion.orSelf(dirtyRegion);
         }
+#ifdef USES_VIRTUAL_DISPLAY
+        HWComposer& hwc(getHwComposer());
+        if (hwc.initCheck() == NO_ERROR) {
+            sp<IServiceManager> sm = defaultServiceManager();
+            sp<IExynosHWCService> hwcService =
+                interface_cast<android::IExynosHWCService>(sm->getService(String16("Exynos.HWCService")));
+            if (hwcService != NULL)
+                hwcService->setPresentationMode(multiple_layerStack);
+            else
+                ALOGE("HWCService::setPresentationMode failed");
+        }
+#endif
     }
 }
 
@@ -1105,8 +1152,22 @@ void SurfaceFlinger::setUpHWComposer() {
 void SurfaceFlinger::doComposition() {
     ATRACE_CALL();
     const bool repaintEverything = android_atomic_and(0, &mRepaintEverything);
+#ifdef USES_VIRTUAL_DISPLAY
+    // Loop twice : Virtual displays first, and other displays at the second
+    // Gives the virtual display compoisition higher priority to reduce latency
+    // when the virtial display surfaces are involved
+    for( int times=0; times<2; times++)
     for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
         const sp<DisplayDevice>& hw(mDisplays[dpy]);
+        // Virtual displays first, and other displays at the second
+        if(times == 0 && hw->getDisplayType() != DisplayDevice::DISPLAY_VIRTUAL)
+            continue;
+        else if(times == 1 && hw->getDisplayType() == DisplayDevice::DISPLAY_VIRTUAL)
+            continue;
+#else
+    for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
+        const sp<DisplayDevice>& hw(mDisplays[dpy]);
+#endif
         if (hw->canDraw()) {
             // transform the dirty region into this screen's coordinate space
             const Region dirtyRegion(hw->getDirtyRegion(repaintEverything));
@@ -1295,6 +1356,20 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                         {
                             disp->setProjection(state.orientation,
                                     state.viewport, state.frame);
+#ifdef USES_VIRTUAL_DISPLAY
+                            if (draw[i].isMainDisplay()) {
+                                HWComposer& hwc(getHwComposer());
+                                if (hwc.initCheck() == NO_ERROR) {
+                                    sp<IServiceManager> sm = defaultServiceManager();
+                                    sp<IExynosHWCService> hwcService =
+                                        interface_cast<android::IExynosHWCService>(sm->getService(String16("Exynos.HWCService")));
+                                    if (hwcService != NULL)
+                                        hwcService->setDispOrientation(state.orientation);
+                                    else
+                                        ALOGE("HWCService::setDispOrientation failed");
+                                }
+                            }
+#endif
                         }
                     }
                 }
@@ -1317,7 +1392,9 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                         // etc.) but no internal state (i.e. a DisplayDevice).
                         if (state.surface != NULL) {
 
+#ifdef USES_VIRTUAL_DISPLAY
                             hwcDisplayId = allocateHwcDisplayId(state.type);
+#endif
                             sp<VirtualDisplaySurface> vds = new VirtualDisplaySurface(
                                     *mHwc, hwcDisplayId, state.surface, bq,
                                     state.displayName);
@@ -1345,9 +1422,37 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
 
                     const wp<IBinder>& display(curr.keyAt(i));
                     if (dispSurface != NULL) {
+#ifdef USES_VIRTUAL_DISPLAY
+                        EGLConfig eglConfig;
+                        if (state.isVirtualDisplay()) {
+                            int format;
+                            producer->query(NATIVE_WINDOW_FORMAT, &format);
+                            if (format == HAL_PIXEL_FORMAT_EXYNOS_ARGB_8888 || format == HAL_PIXEL_FORMAT_RGBA_8888) {
+                                /* make new EGLConfig which uses pixel format from HWC */
+                                status_t err;
+                                EGLDisplay wfdEglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+                                const EGLint lAttributes[] = {
+                                    EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+                                    EGL_BLUE_SIZE, 8, EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8,
+                                    EGL_NONE
+                                };
+                                eglInitialize(wfdEglDisplay, NULL, NULL);
+                                err = selectConfigForAttribute(wfdEglDisplay, lAttributes, EGL_NATIVE_VISUAL_ID,
+                                        format, &eglConfig);
+                            } else {
+                                eglConfig = mEGLConfig;
+                            }
+                        } else {
+                            eglConfig = mEGLConfig;
+                        }
+                        sp<DisplayDevice> hw = new DisplayDevice(this,
+                            state.type, hwcDisplayId, state.isSecure,
+                            display, dispSurface, producer, eglConfig);
+#else
                         sp<DisplayDevice> hw = new DisplayDevice(this,
                                 state.type, hwcDisplayId, state.isSecure,
                                 display, dispSurface, producer, mEGLConfig);
+#endif
                         hw->setLayerStack(state.layerStack);
                         hw->setProjection(state.orientation,
                                 state.viewport, state.frame);
@@ -1358,6 +1463,20 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                                 mHwc->setVirtualDisplayProperties(hwcDisplayId,
                                         hw->getWidth(), hw->getHeight(),
                                         hw->getFormat());
+#ifdef USES_VIRTUAL_DISPLAY
+                                HWComposer& hwc(getHwComposer());
+                                if (hwc.initCheck() == NO_ERROR) {
+                                    sp<IServiceManager> sm = defaultServiceManager();
+                                    sp<IExynosHWCService> hwcService =
+                                        interface_cast<android::IExynosHWCService>(sm->getService(String16("Exynos.HWCService")));
+                                    if (hwcService != NULL) {
+                                        hwcService->setWFDOutputResolution(hw->getWidth(), hw->getHeight(), hw->getWidth(), hw->getHeight());
+                                        ALOGI("Virtual display is added. width(%d), height(%d)", hw->getWidth(), hw->getHeight());
+                                    }
+                                    else
+                                        ALOGE("HWCService::setWFDOutputResolution failed");
+                                }
+#endif
                             }
                         } else {
                             mEventThread->onHotplugReceived(state.type, true);

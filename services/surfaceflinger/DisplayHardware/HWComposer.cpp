@@ -46,6 +46,11 @@
 #include "../Layer.h"           // needed only for debugging
 #include "../SurfaceFlinger.h"
 
+#if defined(NO_FENCE_SYNC)
+unsigned int flag_fbPost_called = 0;
+unsigned int flag_commit_called = 0;
+#endif
+
 namespace android {
 
 #define MIN_HWC_HEADER_VERSION HWC_HEADER_VERSION
@@ -383,7 +388,11 @@ status_t HWComposer::queryDisplayProperties(int disp) {
     }
 
     // FIXME: what should we set the format to?
+#ifdef USE_BGRA_8888
+    mDisplayData[disp].format = HAL_PIXEL_FORMAT_BGRA_8888;
+#else
     mDisplayData[disp].format = HAL_PIXEL_FORMAT_RGBA_8888;
+#endif
     mDisplayData[disp].connected = true;
     if (mDisplayData[disp].xdpi == 0.0f || mDisplayData[disp].ydpi == 0.0f) {
         float dpi = getDefaultDensity(h);
@@ -392,6 +401,48 @@ status_t HWComposer::queryDisplayProperties(int disp) {
     }
     return NO_ERROR;
 }
+
+#ifdef USES_VIRTUAL_DISPLAY
+static const uint32_t VIRTUAL_DISPLAY_ATTRIBUTES[] = {
+    HWC_DISPLAY_COMPOSITION_TYPE,
+    HWC_DISPLAY_GLES_FORMAT,
+    HWC_DISPLAY_SINK_BQ_FORMAT,
+    HWC_DISPLAY_SINK_BQ_USAGE,
+    HWC_DISPLAY_SINK_BQ_WIDTH,
+    HWC_DISPLAY_SINK_BQ_HEIGHT,
+    HWC_DISPLAY_NO_ATTRIBUTE,
+};
+#define NUM_VIRTUAL_DISPLAY_ATTRIBUTES (sizeof(VIRTUAL_DISPLAY_ATTRIBUTES) / sizeof(VIRTUAL_DISPLAY_ATTRIBUTES)[0])
+status_t HWComposer::getVirtualDisplayProperties(int32_t id, uint32_t attribute, uint32_t* value) {
+    if (id < VIRTUAL_DISPLAY_ID_BASE || id >= int32_t(mNumDisplays) ||
+            !mAllocatedDisplayIDs.hasBit(id)) {
+        return BAD_INDEX;
+    }
+
+    // use zero as default value for unspecified attributes
+    int32_t values[NUM_VIRTUAL_DISPLAY_ATTRIBUTES - 1] = {0,};
+    uint32_t config;
+    size_t numConfigs = 1;
+    status_t err = mHwc->getDisplayConfigs(mHwc, id, &config, &numConfigs);
+    if (err != NO_ERROR) {
+        return err;
+    }
+
+    err = mHwc->getDisplayAttributes(mHwc, id, config, VIRTUAL_DISPLAY_ATTRIBUTES, values);
+    if (err != NO_ERROR) {
+        return err;
+    }
+
+    for (size_t i = 0; i < NUM_VIRTUAL_DISPLAY_ATTRIBUTES - 1; i++) {
+        if (attribute == VIRTUAL_DISPLAY_ATTRIBUTES[i]) {
+            *value = values[i];
+            return NO_ERROR;
+        }
+    }
+
+    return BAD_INDEX;
+}
+#endif
 
 status_t HWComposer::setVirtualDisplayProperties(int32_t id,
         uint32_t w, uint32_t h, uint32_t format) {
@@ -658,6 +709,10 @@ status_t HWComposer::prepare() {
             }
         }
     }
+#if defined(NO_FENCE_SYNC)
+    flag_fbPost_called = 0;
+    flag_commit_called = 0;
+#endif
     return (status_t)err;
 }
 
@@ -708,8 +763,21 @@ status_t HWComposer::commit() {
                         disp.outbufAcquireFence->dup();
             }
         }
+#if defined(NO_FENCE_SYNC)
+        int retrycount = 17;
+        while ((hasGlesComposition(DisplayDevice::DISPLAY_PRIMARY)) &&
+               (flag_fbPost_called == flag_commit_called) && (--retrycount >= 0)) {
+            usleep(1000);
+            ALOGD("commit() waits fbPost() retrycount = %d", retrycount);
+        }
+#endif
 
         err = mHwc->set(mHwc, mNumDisplays, mLists);
+
+#if defined(NO_FENCE_SYNC)
+        if (hasGlesComposition(DisplayDevice::DISPLAY_PRIMARY))
+            flag_commit_called++;
+#endif
 
         for (size_t i=0 ; i<mNumDisplays ; i++) {
             DisplayData& disp(mDisplayData[i]);
@@ -762,7 +830,11 @@ int HWComposer::getVisualID() const {
         // FIXME: temporary hack until HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED
         // is supported by the implementation. we can only be in this case
         // if we have HWC 1.1
+#ifdef USE_BGRA_8888
+        return HAL_PIXEL_FORMAT_BGRA_8888;
+#else
         return HAL_PIXEL_FORMAT_RGBA_8888;
+#endif
         //return HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED;
     } else {
         return mFbDev->format;
@@ -776,7 +848,14 @@ bool HWComposer::supportsFramebufferTarget() const {
 int HWComposer::fbPost(int32_t id,
         const sp<Fence>& acquireFence, const sp<GraphicBuffer>& buffer) {
     if (mHwc && hwcHasApiVersion(mHwc, HWC_DEVICE_API_VERSION_1_1)) {
+#if defined(NO_FENCE_SYNC)
+        int ret = setFramebufferTarget(id, acquireFence, buffer);
+        if (hasGlesComposition(DisplayDevice::DISPLAY_PRIMARY))
+            flag_fbPost_called++;
+        return ret;
+#else
         return setFramebufferTarget(id, acquireFence, buffer);
+#endif
     } else {
         acquireFence->waitForever("HWComposer::fbPost");
         return mFbDev->post(mFbDev, buffer->handle);

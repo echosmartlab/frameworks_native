@@ -398,7 +398,11 @@ status_t BufferQueue::dequeueBuffer(int *outBuf, sp<Fence>* outFence, bool async
             (uint32_t(buffer->width)  != w) ||
             (uint32_t(buffer->height) != h) ||
             (uint32_t(buffer->format) != format) ||
+#ifdef USES_WIFI_DISPLAY
+            (uint32_t(buffer->usage) != usage))
+#else
             ((uint32_t(buffer->usage) & usage) != usage))
+#endif
         {
             mSlots[buf].mAcquireCalled = false;
             mSlots[buf].mGraphicBuffer = NULL;

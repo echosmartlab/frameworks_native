@@ -41,6 +41,14 @@ include $(CLEAR_VARS)
 LOCAL_LDLIBS += -lpthread
 LOCAL_MODULE := libbinder
 LOCAL_SHARED_LIBRARIES := liblog libcutils libutils
+
+ifeq ($(BOARD_USE_MHB_ION), true)
+LOCAL_SHARED_LIBRARIES += libion_exynos
+LOCAL_CFLAGS += -DUSE_MHB_ION
+sources += MemoryHeapIon.cpp
+LOCAL_C_INCLUDES := $(TOP)/hardware/samsung_slsi/$(TARGET_BOARD_PLATFORM)/include
+endif
+
 LOCAL_SRC_FILES := $(sources)
 include $(BUILD_SHARED_LIBRARY)
 
@@ -49,4 +57,7 @@ LOCAL_LDLIBS += -lpthread
 LOCAL_MODULE := libbinder
 LOCAL_STATIC_LIBRARIES += libutils
 LOCAL_SRC_FILES := $(sources)
+ifeq ($(BOARD_USE_MHB_ION), true)
+LOCAL_C_INCLUDES := $(TOP)/hardware/samsung_slsi/$(TARGET_BOARD_PLATFORM)/include
+endif
 include $(BUILD_STATIC_LIBRARY)

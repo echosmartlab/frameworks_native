@@ -257,6 +257,9 @@ public:
     float getDpiY(int disp) const;
     bool isConnected(int disp) const;
 
+#ifdef USES_VIRTUAL_DISPLAY
+    status_t getVirtualDisplayProperties(int32_t id, uint32_t property, uint32_t* value);
+#endif
     status_t setVirtualDisplayProperties(int32_t id, uint32_t w, uint32_t h,
             uint32_t format);
 
