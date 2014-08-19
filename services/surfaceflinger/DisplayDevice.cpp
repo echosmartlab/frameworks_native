@@ -40,6 +40,9 @@
 #include "SurfaceFlinger.h"
 #include "Layer.h"
 
+#ifdef USES_VIRTUAL_DISPLAY
+#include "ExynosHWCService.h"
+#endif
 // ----------------------------------------------------------------------------
 using namespace android;
 // ----------------------------------------------------------------------------
@@ -198,9 +201,25 @@ void DisplayDevice::flip(const Region& dirty) const
     mPageFlipCount++;
 }
 
+#ifdef USES_VIRTUAL_DISPLAY
+status_t DisplayDevice::beginFrame() {
+    int halRotation, orientation;
+    if (mType == DisplayDevice::DISPLAY_VIRTUAL) {
+        sp<IServiceManager> sm = defaultServiceManager();
+        sp<IExynosHWCService> hwcService =
+            interface_cast<android::IExynosHWCService>(sm->getService(String16("Exynos.HWCService")));
+        halRotation = hwcService->getExternalUITransform();
+        orientation = getTransformOrientation(halRotation);
+        if (orientation != mOrientation)
+            setProjection(orientation, mViewport, mFrame);
+    }
+    return mDisplaySurface->beginFrame();
+}
+#else
 status_t DisplayDevice::beginFrame() const {
     return mDisplaySurface->beginFrame();
 }
+#endif
 
 status_t DisplayDevice::prepareFrame(const HWComposer& hwc) const {
     DisplaySurface::CompositionType compositionType;
@@ -363,6 +382,27 @@ uint32_t DisplayDevice::getOrientationTransform() const {
     return transform;
 }
 
+#ifdef USES_VIRTUAL_DISPLAY
+uint32_t DisplayDevice::getTransformOrientation(uint32_t transform) const {
+    uint32_t orientation = 0;
+    switch (transform) {
+        case Transform::ROT_0:
+            orientation = DisplayState::eOrientationDefault;
+            break;
+        case Transform::ROT_90:
+            orientation = DisplayState::eOrientation90;
+            break;
+        case Transform::ROT_180:
+            orientation = DisplayState::eOrientation180;
+            break;
+        case Transform::ROT_270:
+            orientation = DisplayState::eOrientation270;
+            break;
+    }
+    return orientation;
+}
+#endif
+
 status_t DisplayDevice::orientationToTransfrom(
         int orientation, int w, int h, Transform* tr)
 {
@@ -386,6 +426,12 @@ status_t DisplayDevice::orientationToTransfrom(
     tr->set(flags, w, h);
     return NO_ERROR;
 }
+
+#ifdef USES_VIRTUAL_DISPLAY
+void DisplayDevice::setProjection(int orientation) {
+    setProjection(orientation, mViewport, mFrame);
+}
+#endif
 
 void DisplayDevice::setProjection(int orientation,
         const Rect& newViewport, const Rect& newFrame) {
@@ -424,6 +470,23 @@ void DisplayDevice::setProjection(int orientation,
     float src_height = viewport.height();
     float dst_width  = frame.width();
     float dst_height = frame.height();
+#ifdef USES_VIRTUAL_DISPLAY
+    if (mType == DisplayDevice::DISPLAY_VIRTUAL) {
+        if (orientation == DisplayState::eOrientation90 || orientation == DisplayState::eOrientation270) {
+            dst_width  = mDisplayHeight;
+            dst_height = mDisplayWidth;
+        } else {
+            dst_width  = mDisplayWidth;
+            dst_height = mDisplayHeight;
+        }
+        /* adjust src width/height ratio to dst */
+        if (src_width / src_height > dst_width / dst_height)
+            dst_height = (src_height * dst_width) / src_width;
+        else
+            dst_width = (src_width * dst_height) / src_height;
+    }
+#endif
+
     if (src_width != dst_width || src_height != dst_height) {
         float sx = dst_width  / src_width;
         float sy = dst_height / src_height;
@@ -434,6 +497,18 @@ void DisplayDevice::setProjection(int orientation,
     float src_y = viewport.top;
     float dst_x = frame.left;
     float dst_y = frame.top;
+#ifdef USES_VIRTUAL_DISPLAY
+    if (mType == DisplayDevice::DISPLAY_VIRTUAL) {
+        if (orientation == DisplayState::eOrientation90 || orientation == DisplayState::eOrientation270) {
+            dst_x = (mDisplayHeight - dst_width) / 2;
+            dst_y = (mDisplayWidth - dst_height) / 2;
+        } else {
+            dst_x = (mDisplayWidth - dst_width) / 2;
+            dst_y = (mDisplayHeight - dst_height) / 2;
+        }
+    }
+#endif
+
     TL.set(-src_x, -src_y);
     TP.set(dst_x, dst_y);
 

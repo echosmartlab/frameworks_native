@@ -36,7 +36,8 @@ public:
 
     // flags returned by getFlags()
     enum {
-        READ_ONLY   = 0x00000001
+        READ_ONLY   = 0x00000001,
+        USE_ION_FD  = 0x00008000  // USE_ION_FD (1 << 51)
     };
 
     virtual int         getHeapID() const = 0;

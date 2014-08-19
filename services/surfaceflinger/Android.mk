@@ -85,6 +85,18 @@ endif
 
 LOCAL_CFLAGS += -fvisibility=hidden
 
+ifeq ($(BOARD_USE_BGRA_8888),true)
+	LOCAL_CFLAGS += -DUSE_BGRA_8888
+endif
+
+ifeq ($(BOARD_USES_FB_PHY_LINEAR),true)
+	LOCAL_CFLAGS += -DUSE_FB_PHY_LINEAR
+endif
+
+ifeq ($(BOARD_USES_NO_FENCE_SYNC),true)
+	LOCAL_CFLAGS += -DNO_FENCE_SYNC
+endif
+
 LOCAL_SHARED_LIBRARIES := \
 	libcutils \
 	liblog \
@@ -97,6 +109,35 @@ LOCAL_SHARED_LIBRARIES := \
 	libbinder \
 	libui \
 	libgui
+
+ifeq ($(BOARD_USES_HWC_SERVICES), true)
+	LOCAL_CFLAGS += -DUSES_HWC_SERVICES
+	LOCAL_SHARED_LIBRARIES += libExynosHWCService
+	LOCAL_C_INCLUDES += \
+		$(TOP)/hardware/samsung_slsi/$(TARGET_BOARD_PLATFORM)/libhwcService \
+		$(TOP)/hardware/samsung_slsi/$(TARGET_BOARD_PLATFORM)/include \
+		$(TOP)/hardware/samsung_slsi/$(TARGET_SOC)/include \
+		$(TOP)/hardware/samsung_slsi/$(TARGET_SOC)/libhwcmodule \
+		$(TOP)/hardware/samsung_slsi/exynos/libhwc \
+		$(TOP)/hardware/samsung_slsi/exynos/include \
+		$(TOP)/hardware/samsung_slsi/exynos/libexynosutils
+ifeq ($(BOARD_USES_VIRTUAL_DISPLAY),true)
+	LOCAL_CFLAGS += -DUSES_VIRTUAL_DISPLAY
+endif
+ifeq ($(BOARD_SUPPORT_DQ_Q_SEQUENCE), true)
+	LOCAL_CFLAGS += -DSUPPORT_DQ_Q_SEQUENCE
+endif
+ifeq ($(BOARD_SUPPORT_Q_DQ_SEQUENCE), true)
+	LOCAL_CFLAGS += -DSUPPORT_Q_DQ_SEQUENCE
+endif
+ifneq ($(BOARD_HDMI_INCAPABLE), true)
+	LOCAL_CFLAGS += -DHDMI_ENABLED
+endif
+endif
+
+ifeq ($(BOARD_USES_FIMC), true)
+	LOCAL_CFLAGS += -DUSES_FIMC
+endif
 
 LOCAL_MODULE:= libsurfaceflinger
 

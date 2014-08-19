@@ -108,6 +108,9 @@ static const TracingCategory k_categories[] = {
     } },
     { "load",       "CPU Load",         0, {
         { REQ,      "/sys/kernel/debug/tracing/events/cpufreq_interactive/enable" },
+#if defined(CPU_SUPPORT_HMP)
+        { REQ,      "/sys/kernel/debug/tracing/events/cpufreq_interactive_eagle/enable" },
+#endif
     } },
     { "sync",       "Synchronization",  0, {
         { REQ,      "/sys/kernel/debug/tracing/events/sync/enable" },

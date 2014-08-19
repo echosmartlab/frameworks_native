@@ -144,6 +144,14 @@ private:
     // different usage/format, we'll get a new buffer.
     uint32_t mOutputFormat;
     uint32_t mOutputUsage;
+#ifdef SUPPORT_Q_DQ_SEQUENCE
+    uint32_t mGLESFormat;
+    uint32_t mOnSwitching;
+#endif
+#if defined (SUPPORT_DQ_Q_SEQUENCE) || defined(SUPPORT_Q_DQ_SEQUENCE)
+    uint32_t mSinkUsage, mSinkFormat;
+    bool mIsHWCOnlyState;
+#endif
 
     // Since we present a single producer interface to the GLES driver, but
     // are internally muxing between the sink and scratch producers, we have
@@ -178,11 +186,17 @@ private:
     // mOutputFence is the fence HWC should wait for before writing to the
     // output buffer.
     sp<Fence> mOutputFence;
+#ifdef SUPPORT_Q_DQ_SEQUENCE
+    sp<Fence> mNextOutputFence;
+#endif
 
     // Producer slot numbers for the buffers to use for HWC framebuffer target
     // and output.
     int mFbProducerSlot;
     int mOutputProducerSlot;
+#ifdef SUPPORT_Q_DQ_SEQUENCE
+    int mNextOutputProducerSlot;
+#endif
 
     // Debug only -- track the sequence of events in each frame so we can make
     // sure they happen in the order we expect. This class implicitly models

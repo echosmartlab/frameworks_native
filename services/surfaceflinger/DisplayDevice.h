@@ -109,9 +109,14 @@ public:
 
     void                    setLayerStack(uint32_t stack);
     void                    setProjection(int orientation, const Rect& viewport, const Rect& frame);
-
+#ifdef USES_VIRTUAL_DISPLAY
+    void                    setProjection(int orientation);
+#endif
     int                     getOrientation() const { return mOrientation; }
     uint32_t                getOrientationTransform() const;
+#ifdef USES_VIRTUAL_DISPLAY
+    uint32_t                getTransformOrientation(uint32_t transform) const;
+#endif
     const Transform&        getTransform() const { return mGlobalTransform; }
     const Rect              getViewport() const { return mViewport; }
     const Rect              getFrame() const { return mFrame; }
@@ -123,7 +128,11 @@ public:
     int32_t                 getHwcDisplayId() const { return mHwcDisplayId; }
     const wp<IBinder>&      getDisplayToken() const { return mDisplayToken; }
 
+#ifdef USES_VIRTUAL_DISPLAY
+    status_t beginFrame();
+#else
     status_t beginFrame() const;
+#endif
     status_t prepareFrame(const HWComposer& hwc) const;
 
     void swapBuffers(HWComposer& hwc) const;

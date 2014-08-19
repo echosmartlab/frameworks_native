@@ -11,6 +11,10 @@ LOCAL_MODULE:= atrace
 
 LOCAL_MODULE_TAGS:= optional
 
+ifeq ($(BOARD_SUPPORT_HMP), true)
+LOCAL_CFLAGS += -DCPU_SUPPORT_HMP
+endif
+
 LOCAL_SHARED_LIBRARIES := \
     libbinder \
     libcutils \
