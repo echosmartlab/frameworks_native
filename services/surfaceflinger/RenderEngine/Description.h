@@ -62,6 +62,7 @@ public:
     void setPremultipliedAlpha(bool premultipliedAlpha);
     void setOpaque(bool opaque);
     void setTexture(const Texture& texture);
+    Texture  getTexture();
     void disableTexture();
     void setColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha);
     void setProjectionMatrix(const mat4& mtx);

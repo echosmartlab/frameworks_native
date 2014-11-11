@@ -47,6 +47,9 @@ class ISurfaceComposer: public IInterface {
 public:
     DECLARE_META_INTERFACE(SurfaceComposer);
 
+    //TODO
+        //eOpaque             = 0x00000400,
+        //eLayerOpaque        = 0x20
     // flags for setTransactionState()
     enum {
         eSynchronous = 0x01,

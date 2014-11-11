@@ -65,6 +65,10 @@ void Description::setTexture(const Texture& texture) {
     mUniformsDirty = true;
 }
 
+Texture Description::getTexture() {
+    return mTexture;
+}
+
 void Description::disableTexture() {
     mTextureEnabled = false;
 }

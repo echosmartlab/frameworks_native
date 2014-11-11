@@ -14,13 +14,11 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "Surface"
+#define LOG_TAG "SurfaceTextureClient"
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 //#define LOG_NDEBUG 0
 
 #include <android/native_window.h>
-
-#include <binder/Parcel.h>
 
 #include <utils/Log.h>
 #include <utils/Trace.h>
@@ -29,18 +27,39 @@
 
 #include <gui/ISurfaceComposer.h>
 #include <gui/SurfaceComposerClient.h>
-#include <gui/GLConsumer.h>
-#include <gui/Surface.h>
+#include <gui/SurfaceTexture.h>
+#include <gui/SurfaceTextureClient.h>
 
 #include <private/gui/ComposerService.h>
 
 namespace android {
 
-Surface::Surface(
-        const sp<IGraphicBufferProducer>& bufferProducer,
-        bool controlledByApp)
-    : mGraphicBufferProducer(bufferProducer)
+SurfaceTextureClient::SurfaceTextureClient(
+        const sp<ISurfaceTexture>& surfaceTexture)
 {
+    SurfaceTextureClient::init();
+    SurfaceTextureClient::setISurfaceTexture(surfaceTexture);
+}
+
+// see SurfaceTextureClient.h
+SurfaceTextureClient::SurfaceTextureClient(const
+         sp<SurfaceTexture>& surfaceTexture)
+{
+    SurfaceTextureClient::init();
+    SurfaceTextureClient::setISurfaceTexture(surfaceTexture->getBufferQueue());
+}
+
+SurfaceTextureClient::SurfaceTextureClient() {
+    SurfaceTextureClient::init();
+}
+
+SurfaceTextureClient::~SurfaceTextureClient() {
+    if (mConnectedToCpu) {
+        SurfaceTextureClient::disconnect(NATIVE_WINDOW_API_CPU);
+    }
+}
+
+void SurfaceTextureClient::init() {
     // Initialize the ANativeWindow function pointers.
     ANativeWindow::setSwapInterval  = hook_setSwapInterval;
     ANativeWindow::dequeueBuffer    = hook_dequeueBuffer;
@@ -72,51 +91,49 @@ Surface::Surface(
     mTransformHint = 0;
     mConsumerRunningBehind = false;
     mConnectedToCpu = false;
-    mProducerControlledByApp = controlledByApp;
-    mSwapIntervalZero = false;
 }
 
-Surface::~Surface() {
-    if (mConnectedToCpu) {
-        Surface::disconnect(NATIVE_WINDOW_API_CPU);
-    }
+void SurfaceTextureClient::setISurfaceTexture(
+        const sp<ISurfaceTexture>& surfaceTexture)
+{
+    mSurfaceTexture = surfaceTexture;
 }
 
-sp<IGraphicBufferProducer> Surface::getIGraphicBufferProducer() const {
-    return mGraphicBufferProducer;
+sp<ISurfaceTexture> SurfaceTextureClient::getISurfaceTexture() const {
+    return mSurfaceTexture;
 }
 
-int Surface::hook_setSwapInterval(ANativeWindow* window, int interval) {
-    Surface* c = getSelf(window);
+int SurfaceTextureClient::hook_setSwapInterval(ANativeWindow* window, int interval) {
+    SurfaceTextureClient* c = getSelf(window);
     return c->setSwapInterval(interval);
 }
 
-int Surface::hook_dequeueBuffer(ANativeWindow* window,
+int SurfaceTextureClient::hook_dequeueBuffer(ANativeWindow* window,
         ANativeWindowBuffer** buffer, int* fenceFd) {
-    Surface* c = getSelf(window);
+    SurfaceTextureClient* c = getSelf(window);
     return c->dequeueBuffer(buffer, fenceFd);
 }
 
-int Surface::hook_cancelBuffer(ANativeWindow* window,
+int SurfaceTextureClient::hook_cancelBuffer(ANativeWindow* window,
         ANativeWindowBuffer* buffer, int fenceFd) {
-    Surface* c = getSelf(window);
+    SurfaceTextureClient* c = getSelf(window);
     return c->cancelBuffer(buffer, fenceFd);
 }
 
-int Surface::hook_queueBuffer(ANativeWindow* window,
+int SurfaceTextureClient::hook_queueBuffer(ANativeWindow* window,
         ANativeWindowBuffer* buffer, int fenceFd) {
-    Surface* c = getSelf(window);
+    SurfaceTextureClient* c = getSelf(window);
     return c->queueBuffer(buffer, fenceFd);
 }
 
-int Surface::hook_dequeueBuffer_DEPRECATED(ANativeWindow* window,
+int SurfaceTextureClient::hook_dequeueBuffer_DEPRECATED(ANativeWindow* window,
         ANativeWindowBuffer** buffer) {
-    Surface* c = getSelf(window);
+    SurfaceTextureClient* c = getSelf(window);
     ANativeWindowBuffer* buf;
     int fenceFd = -1;
     int result = c->dequeueBuffer(&buf, &fenceFd);
     sp<Fence> fence(new Fence(fenceFd));
-    int waitResult = fence->waitForever("dequeueBuffer_DEPRECATED");
+    int waitResult = fence->waitForever(1000, "dequeueBuffer_DEPRECATED");
     if (waitResult != OK) {
         ALOGE("dequeueBuffer_DEPRECATED: Fence::wait returned an error: %d",
                 waitResult);
@@ -127,42 +144,43 @@ int Surface::hook_dequeueBuffer_DEPRECATED(ANativeWindow* window,
     return result;
 }
 
-int Surface::hook_cancelBuffer_DEPRECATED(ANativeWindow* window,
+int SurfaceTextureClient::hook_cancelBuffer_DEPRECATED(ANativeWindow* window,
         ANativeWindowBuffer* buffer) {
-    Surface* c = getSelf(window);
+    SurfaceTextureClient* c = getSelf(window);
     return c->cancelBuffer(buffer, -1);
 }
 
-int Surface::hook_lockBuffer_DEPRECATED(ANativeWindow* window,
+int SurfaceTextureClient::hook_lockBuffer_DEPRECATED(ANativeWindow* window,
         ANativeWindowBuffer* buffer) {
-    Surface* c = getSelf(window);
+    SurfaceTextureClient* c = getSelf(window);
     return c->lockBuffer_DEPRECATED(buffer);
 }
 
-int Surface::hook_queueBuffer_DEPRECATED(ANativeWindow* window,
+int SurfaceTextureClient::hook_queueBuffer_DEPRECATED(ANativeWindow* window,
         ANativeWindowBuffer* buffer) {
-    Surface* c = getSelf(window);
+    SurfaceTextureClient* c = getSelf(window);
     return c->queueBuffer(buffer, -1);
 }
 
-int Surface::hook_query(const ANativeWindow* window,
+int SurfaceTextureClient::hook_query(const ANativeWindow* window,
                                 int what, int* value) {
-    const Surface* c = getSelf(window);
+    const SurfaceTextureClient* c = getSelf(window);
     return c->query(what, value);
 }
 
-int Surface::hook_perform(ANativeWindow* window, int operation, ...) {
+int SurfaceTextureClient::hook_perform(ANativeWindow* window, int operation, ...) {
     va_list args;
     va_start(args, operation);
-    Surface* c = getSelf(window);
+    SurfaceTextureClient* c = getSelf(window);
     return c->perform(operation, args);
 }
 
-int Surface::setSwapInterval(int interval) {
+int SurfaceTextureClient::setSwapInterval(int interval) {
     ATRACE_CALL();
     // EGL specification states:
     //  interval is silently clamped to minimum and maximum implementation
     //  dependent values before being stored.
+    // Although we don't have to, we apply the same logic here.
 
     if (interval < minSwapInterval)
         interval = minSwapInterval;
@@ -170,45 +188,43 @@ int Surface::setSwapInterval(int interval) {
     if (interval > maxSwapInterval)
         interval = maxSwapInterval;
 
-    mSwapIntervalZero = (interval == 0);
+    status_t res = mSurfaceTexture->setSynchronousMode(interval ? true : false);
 
-    return NO_ERROR;
+    return res;
 }
 
-int Surface::dequeueBuffer(android_native_buffer_t** buffer, int* fenceFd) {
+int SurfaceTextureClient::dequeueBuffer(android_native_buffer_t** buffer,
+        int* fenceFd) {
     ATRACE_CALL();
-    ALOGV("Surface::dequeueBuffer");
+    ALOGV("SurfaceTextureClient::dequeueBuffer");
     Mutex::Autolock lock(mMutex);
     int buf = -1;
     int reqW = mReqWidth ? mReqWidth : mUserWidth;
     int reqH = mReqHeight ? mReqHeight : mUserHeight;
     sp<Fence> fence;
-    status_t result = mGraphicBufferProducer->dequeueBuffer(&buf, &fence, mSwapIntervalZero,
-            reqW, reqH, mReqFormat, mReqUsage);
+    status_t result = mSurfaceTexture->dequeueBuffer(&buf, fence, reqW, reqH,
+            mReqFormat, mReqUsage);
     if (result < 0) {
-        ALOGV("dequeueBuffer: IGraphicBufferProducer::dequeueBuffer(%d, %d, %d, %d)"
+        ALOGV("dequeueBuffer: ISurfaceTexture::dequeueBuffer(%d, %d, %d, %d)"
              "failed: %d", mReqWidth, mReqHeight, mReqFormat, mReqUsage,
              result);
         return result;
     }
     sp<GraphicBuffer>& gbuf(mSlots[buf].buffer);
-
-    // this should never happen
-    ALOGE_IF(fence == NULL, "Surface::dequeueBuffer: received null Fence! buf=%d", buf);
-
-    if (result & IGraphicBufferProducer::RELEASE_ALL_BUFFERS) {
+    if (result & ISurfaceTexture::RELEASE_ALL_BUFFERS) {
         freeAllBuffers();
     }
 
-    if ((result & IGraphicBufferProducer::BUFFER_NEEDS_REALLOCATION) || gbuf == 0) {
-        result = mGraphicBufferProducer->requestBuffer(buf, &gbuf);
+    if ((result & ISurfaceTexture::BUFFER_NEEDS_REALLOCATION) || gbuf == 0) {
+        result = mSurfaceTexture->requestBuffer(buf, &gbuf);
         if (result != NO_ERROR) {
-            ALOGE("dequeueBuffer: IGraphicBufferProducer::requestBuffer failed: %d", result);
+            ALOGE("dequeueBuffer: ISurfaceTexture::requestBuffer failed: %d",
+                    result);
             return result;
         }
     }
 
-    if (fence->isValid()) {
+    if (fence.get()) {
         *fenceFd = fence->dup();
         if (*fenceFd == -1) {
             ALOGE("dequeueBuffer: error duping fence: %d", errno);
@@ -224,21 +240,21 @@ int Surface::dequeueBuffer(android_native_buffer_t** buffer, int* fenceFd) {
     return OK;
 }
 
-int Surface::cancelBuffer(android_native_buffer_t* buffer,
+int SurfaceTextureClient::cancelBuffer(android_native_buffer_t* buffer,
         int fenceFd) {
     ATRACE_CALL();
-    ALOGV("Surface::cancelBuffer");
+    ALOGV("SurfaceTextureClient::cancelBuffer");
     Mutex::Autolock lock(mMutex);
     int i = getSlotFromBufferLocked(buffer);
     if (i < 0) {
         return i;
     }
-    sp<Fence> fence(fenceFd >= 0 ? new Fence(fenceFd) : Fence::NO_FENCE);
-    mGraphicBufferProducer->cancelBuffer(i, fence);
+    sp<Fence> fence(fenceFd >= 0 ? new Fence(fenceFd) : NULL);
+    mSurfaceTexture->cancelBuffer(i, fence);
     return OK;
 }
 
-int Surface::getSlotFromBufferLocked(
+int SurfaceTextureClient::getSlotFromBufferLocked(
         android_native_buffer_t* buffer) const {
     bool dumpedState = false;
     for (int i = 0; i < NUM_BUFFER_SLOTS; i++) {
@@ -251,23 +267,21 @@ int Surface::getSlotFromBufferLocked(
     return BAD_VALUE;
 }
 
-int Surface::lockBuffer_DEPRECATED(android_native_buffer_t* buffer) {
-    ALOGV("Surface::lockBuffer");
+int SurfaceTextureClient::lockBuffer_DEPRECATED(android_native_buffer_t* buffer) {
+    ALOGV("SurfaceTextureClient::lockBuffer");
     Mutex::Autolock lock(mMutex);
     return OK;
 }
 
-int Surface::queueBuffer(android_native_buffer_t* buffer, int fenceFd) {
+int SurfaceTextureClient::queueBuffer(android_native_buffer_t* buffer, int fenceFd) {
     ATRACE_CALL();
-    ALOGV("Surface::queueBuffer");
+    ALOGV("SurfaceTextureClient::queueBuffer");
     Mutex::Autolock lock(mMutex);
     int64_t timestamp;
-    bool isAutoTimestamp = false;
     if (mTimestamp == NATIVE_WINDOW_TIMESTAMP_AUTO) {
         timestamp = systemTime(SYSTEM_TIME_MONOTONIC);
-        isAutoTimestamp = true;
-        ALOGV("Surface::queueBuffer making up timestamp: %.2f ms",
-            timestamp / 1000000.f);
+        ALOGV("SurfaceTextureClient::queueBuffer making up timestamp: %.2f ms",
+             timestamp / 1000000.f);
     } else {
         timestamp = mTimestamp;
     }
@@ -281,11 +295,11 @@ int Surface::queueBuffer(android_native_buffer_t* buffer, int fenceFd) {
     Rect crop;
     mCrop.intersect(Rect(buffer->width, buffer->height), &crop);
 
-    sp<Fence> fence(fenceFd >= 0 ? new Fence(fenceFd) : Fence::NO_FENCE);
-    IGraphicBufferProducer::QueueBufferOutput output;
-    IGraphicBufferProducer::QueueBufferInput input(timestamp, isAutoTimestamp,
-            crop, mScalingMode, mTransform, mSwapIntervalZero, fence);
-    status_t err = mGraphicBufferProducer->queueBuffer(i, input, &output);
+    sp<Fence> fence(fenceFd >= 0 ? new Fence(fenceFd) : NULL);
+    ISurfaceTexture::QueueBufferOutput output;
+    ISurfaceTexture::QueueBufferInput input(timestamp, crop, mScalingMode,
+            mTransform, fence);
+    status_t err = mSurfaceTexture->queueBuffer(i, input, &output);
     if (err != OK)  {
         ALOGE("queueBuffer: error queuing buffer to SurfaceTexture, %d", err);
     }
@@ -298,9 +312,9 @@ int Surface::queueBuffer(android_native_buffer_t* buffer, int fenceFd) {
     return err;
 }
 
-int Surface::query(int what, int* value) const {
+int SurfaceTextureClient::query(int what, int* value) const {
     ATRACE_CALL();
-    ALOGV("Surface::query");
+    ALOGV("SurfaceTextureClient::query");
     { // scope for the lock
         Mutex::Autolock lock(mMutex);
         switch (what) {
@@ -313,7 +327,7 @@ int Surface::query(int what, int* value) const {
             case NATIVE_WINDOW_QUEUES_TO_WINDOW_COMPOSER: {
                 sp<ISurfaceComposer> composer(
                         ComposerService::getComposerService());
-                if (composer->authenticateSurfaceTexture(mGraphicBufferProducer)) {
+                if (composer->authenticateSurfaceTexture(mSurfaceTexture)) {
                     *value = 1;
                 } else {
                     *value = 0;
@@ -321,7 +335,7 @@ int Surface::query(int what, int* value) const {
                 return NO_ERROR;
             }
             case NATIVE_WINDOW_CONCRETE_TYPE:
-                *value = NATIVE_WINDOW_SURFACE;
+                *value = NATIVE_WINDOW_SURFACE_TEXTURE_CLIENT;
                 return NO_ERROR;
             case NATIVE_WINDOW_DEFAULT_WIDTH:
                 *value = mUserWidth ? mUserWidth : mDefaultWidth;
@@ -337,7 +351,7 @@ int Surface::query(int what, int* value) const {
                 if (!mConsumerRunningBehind) {
                     *value = 0;
                 } else {
-                    err = mGraphicBufferProducer->query(what, value);
+                    err = mSurfaceTexture->query(what, value);
                     if (err == NO_ERROR) {
                         mConsumerRunningBehind = *value;
                     }
@@ -350,10 +364,10 @@ int Surface::query(int what, int* value) const {
                 return NO_ERROR;*/
         }
     }
-    return mGraphicBufferProducer->query(what, value);
+    return mSurfaceTexture->query(what, value);
 }
 
-int Surface::perform(int operation, va_list args)
+int SurfaceTextureClient::perform(int operation, va_list args)
 {
     int res = NO_ERROR;
     switch (operation) {
@@ -412,32 +426,32 @@ int Surface::perform(int operation, va_list args)
     return res;
 }
 
-int Surface::dispatchConnect(va_list args) {
+int SurfaceTextureClient::dispatchConnect(va_list args) {
     int api = va_arg(args, int);
     return connect(api);
 }
 
-int Surface::dispatchDisconnect(va_list args) {
+int SurfaceTextureClient::dispatchDisconnect(va_list args) {
     int api = va_arg(args, int);
     return disconnect(api);
 }
 
-int Surface::dispatchSetUsage(va_list args) {
+int SurfaceTextureClient::dispatchSetUsage(va_list args) {
     int usage = va_arg(args, int);
     return setUsage(usage);
 }
 
-int Surface::dispatchSetCrop(va_list args) {
+int SurfaceTextureClient::dispatchSetCrop(va_list args) {
     android_native_rect_t const* rect = va_arg(args, android_native_rect_t*);
     return setCrop(reinterpret_cast<Rect const*>(rect));
 }
 
-int Surface::dispatchSetBufferCount(va_list args) {
+int SurfaceTextureClient::dispatchSetBufferCount(va_list args) {
     size_t bufferCount = va_arg(args, size_t);
     return setBufferCount(bufferCount);
 }
 
-int Surface::dispatchSetBuffersGeometry(va_list args) {
+int SurfaceTextureClient::dispatchSetBuffersGeometry(va_list args) {
     int w = va_arg(args, int);
     int h = va_arg(args, int);
     int f = va_arg(args, int);
@@ -448,56 +462,55 @@ int Surface::dispatchSetBuffersGeometry(va_list args) {
     return setBuffersFormat(f);
 }
 
-int Surface::dispatchSetBuffersDimensions(va_list args) {
+int SurfaceTextureClient::dispatchSetBuffersDimensions(va_list args) {
     int w = va_arg(args, int);
     int h = va_arg(args, int);
     return setBuffersDimensions(w, h);
 }
 
-int Surface::dispatchSetBuffersUserDimensions(va_list args) {
+int SurfaceTextureClient::dispatchSetBuffersUserDimensions(va_list args) {
     int w = va_arg(args, int);
     int h = va_arg(args, int);
     return setBuffersUserDimensions(w, h);
 }
 
-int Surface::dispatchSetBuffersFormat(va_list args) {
+int SurfaceTextureClient::dispatchSetBuffersFormat(va_list args) {
     int f = va_arg(args, int);
     return setBuffersFormat(f);
 }
 
-int Surface::dispatchSetScalingMode(va_list args) {
+int SurfaceTextureClient::dispatchSetScalingMode(va_list args) {
     int m = va_arg(args, int);
     return setScalingMode(m);
 }
 
-int Surface::dispatchSetBuffersTransform(va_list args) {
+int SurfaceTextureClient::dispatchSetBuffersTransform(va_list args) {
     int transform = va_arg(args, int);
     return setBuffersTransform(transform);
 }
 
-int Surface::dispatchSetBuffersTimestamp(va_list args) {
+int SurfaceTextureClient::dispatchSetBuffersTimestamp(va_list args) {
     int64_t timestamp = va_arg(args, int64_t);
     return setBuffersTimestamp(timestamp);
 }
 
-int Surface::dispatchLock(va_list args) {
+int SurfaceTextureClient::dispatchLock(va_list args) {
     ANativeWindow_Buffer* outBuffer = va_arg(args, ANativeWindow_Buffer*);
     ARect* inOutDirtyBounds = va_arg(args, ARect*);
     return lock(outBuffer, inOutDirtyBounds);
 }
 
-int Surface::dispatchUnlockAndPost(va_list args) {
+int SurfaceTextureClient::dispatchUnlockAndPost(va_list args) {
     return unlockAndPost();
 }
 
 
-int Surface::connect(int api) {
+int SurfaceTextureClient::connect(int api) {
     ATRACE_CALL();
-    ALOGV("Surface::connect");
-    static sp<BBinder> sLife = new BBinder();
+    ALOGV("SurfaceTextureClient::connect");
     Mutex::Autolock lock(mMutex);
-    IGraphicBufferProducer::QueueBufferOutput output;
-    int err = mGraphicBufferProducer->connect(sLife, api, mProducerControlledByApp, &output);
+    ISurfaceTexture::QueueBufferOutput output;
+    int err = mSurfaceTexture->connect(api, &output);
     if (err == NO_ERROR) {
         uint32_t numPendingBuffers = 0;
         output.deflate(&mDefaultWidth, &mDefaultHeight, &mTransformHint,
@@ -510,13 +523,12 @@ int Surface::connect(int api) {
     return err;
 }
 
-
-int Surface::disconnect(int api) {
+int SurfaceTextureClient::disconnect(int api) {
     ATRACE_CALL();
-    ALOGV("Surface::disconnect");
+    ALOGV("SurfaceTextureClient::disconnect");
     Mutex::Autolock lock(mMutex);
     freeAllBuffers();
-    int err = mGraphicBufferProducer->disconnect(api);
+    int err = mSurfaceTexture->disconnect(api);
     if (!err) {
         mReqFormat = 0;
         mReqWidth = 0;
@@ -532,15 +544,15 @@ int Surface::disconnect(int api) {
     return err;
 }
 
-int Surface::setUsage(uint32_t reqUsage)
+int SurfaceTextureClient::setUsage(uint32_t reqUsage)
 {
-    ALOGV("Surface::setUsage");
+    ALOGV("SurfaceTextureClient::setUsage");
     Mutex::Autolock lock(mMutex);
     mReqUsage = reqUsage;
     return OK;
 }
 
-int Surface::setCrop(Rect const* rect)
+int SurfaceTextureClient::setCrop(Rect const* rect)
 {
     ATRACE_CALL();
 
@@ -551,7 +563,7 @@ int Surface::setCrop(Rect const* rect)
         realRect = *rect;
     }
 
-    ALOGV("Surface::setCrop rect=[%d %d %d %d]",
+    ALOGV("SurfaceTextureClient::setCrop rect=[%d %d %d %d]",
             realRect.left, realRect.top, realRect.right, realRect.bottom);
 
     Mutex::Autolock lock(mMutex);
@@ -559,14 +571,14 @@ int Surface::setCrop(Rect const* rect)
     return NO_ERROR;
 }
 
-int Surface::setBufferCount(int bufferCount)
+int SurfaceTextureClient::setBufferCount(int bufferCount)
 {
     ATRACE_CALL();
-    ALOGV("Surface::setBufferCount");
+    ALOGV("SurfaceTextureClient::setBufferCount");
     Mutex::Autolock lock(mMutex);
 
-    status_t err = mGraphicBufferProducer->setBufferCount(bufferCount);
-    ALOGE_IF(err, "IGraphicBufferProducer::setBufferCount(%d) returned %s",
+    status_t err = mSurfaceTexture->setBufferCount(bufferCount);
+    ALOGE_IF(err, "ISurfaceTexture::setBufferCount(%d) returned %s",
             bufferCount, strerror(-err));
 
     if (err == NO_ERROR) {
@@ -576,10 +588,10 @@ int Surface::setBufferCount(int bufferCount)
     return err;
 }
 
-int Surface::setBuffersDimensions(int w, int h)
+int SurfaceTextureClient::setBuffersDimensions(int w, int h)
 {
     ATRACE_CALL();
-    ALOGV("Surface::setBuffersDimensions");
+    ALOGV("SurfaceTextureClient::setBuffersDimensions");
 
     if (w<0 || h<0)
         return BAD_VALUE;
@@ -593,10 +605,10 @@ int Surface::setBuffersDimensions(int w, int h)
     return NO_ERROR;
 }
 
-int Surface::setBuffersUserDimensions(int w, int h)
+int SurfaceTextureClient::setBuffersUserDimensions(int w, int h)
 {
     ATRACE_CALL();
-    ALOGV("Surface::setBuffersUserDimensions");
+    ALOGV("SurfaceTextureClient::setBuffersUserDimensions");
 
     if (w<0 || h<0)
         return BAD_VALUE;
@@ -610,9 +622,9 @@ int Surface::setBuffersUserDimensions(int w, int h)
     return NO_ERROR;
 }
 
-int Surface::setBuffersFormat(int format)
+int SurfaceTextureClient::setBuffersFormat(int format)
 {
-    ALOGV("Surface::setBuffersFormat");
+    ALOGV("SurfaceTextureClient::setBuffersFormat");
 
     if (format<0)
         return BAD_VALUE;
@@ -622,10 +634,10 @@ int Surface::setBuffersFormat(int format)
     return NO_ERROR;
 }
 
-int Surface::setScalingMode(int mode)
+int SurfaceTextureClient::setScalingMode(int mode)
 {
     ATRACE_CALL();
-    ALOGV("Surface::setScalingMode(%d)", mode);
+    ALOGV("SurfaceTextureClient::setScalingMode(%d)", mode);
 
     switch (mode) {
         case NATIVE_WINDOW_SCALING_MODE_FREEZE:
@@ -642,24 +654,24 @@ int Surface::setScalingMode(int mode)
     return NO_ERROR;
 }
 
-int Surface::setBuffersTransform(int transform)
+int SurfaceTextureClient::setBuffersTransform(int transform)
 {
     ATRACE_CALL();
-    ALOGV("Surface::setBuffersTransform");
+    ALOGV("SurfaceTextureClient::setBuffersTransform");
     Mutex::Autolock lock(mMutex);
     mTransform = transform;
     return NO_ERROR;
 }
 
-int Surface::setBuffersTimestamp(int64_t timestamp)
+int SurfaceTextureClient::setBuffersTimestamp(int64_t timestamp)
 {
-    ALOGV("Surface::setBuffersTimestamp");
+    ALOGV("SurfaceTextureClient::setBuffersTimestamp");
     Mutex::Autolock lock(mMutex);
     mTimestamp = timestamp;
     return NO_ERROR;
 }
 
-void Surface::freeAllBuffers() {
+void SurfaceTextureClient::freeAllBuffers() {
     for (int i = 0; i < NUM_BUFFER_SLOTS; i++) {
         mSlots[i].buffer = 0;
     }
@@ -721,7 +733,7 @@ static status_t copyBlt(
 
 // ----------------------------------------------------------------------------
 
-status_t Surface::lock(
+status_t SurfaceTextureClient::lock(
         ANativeWindow_Buffer* outBuffer, ARect* inOutDirtyBounds)
 {
     if (mLockedBuffer != 0) {
@@ -730,7 +742,7 @@ status_t Surface::lock(
     }
 
     if (!mConnectedToCpu) {
-        int err = Surface::connect(NATIVE_WINDOW_API_CPU);
+        int err = SurfaceTextureClient::connect(NATIVE_WINDOW_API_CPU);
         if (err) {
             return err;
         }
@@ -746,7 +758,7 @@ status_t Surface::lock(
         sp<GraphicBuffer> backBuffer(GraphicBuffer::getSelf(out));
         sp<Fence> fence(new Fence(fenceFd));
 
-        err = fence->waitForever("Surface::lock");
+        err = fence->waitForever(1000, "SurfaceTextureClient::lock");
         if (err != OK) {
             ALOGE("Fence::wait failed (%s)", strerror(-err));
             cancelBuffer(out, fenceFd);
@@ -824,7 +836,7 @@ status_t Surface::lock(
     return err;
 }
 
-status_t Surface::unlockAndPost()
+status_t SurfaceTextureClient::unlockAndPost()
 {
     if (mLockedBuffer == 0) {
         ALOGE("Surface::unlockAndPost failed, no locked buffer");

@@ -135,7 +135,14 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamAudioEvrc,                /**< reference: OMX_AUDIO_PARAM_EVRCTYPE */
     OMX_IndexParamAudioSmv,                 /**< reference: OMX_AUDIO_PARAM_SMVTYPE */
     OMX_IndexParamAudioVorbis,              /**< reference: OMX_AUDIO_PARAM_VORBISTYPE */
+    OMX_IndexParamAudioAsf,                 /**< reference: OMX_AUDIO_PARAM_WMASTDTYPE */
     OMX_IndexParamAudioFlac,                /**< reference: OMX_AUDIO_PARAM_FLACTYPE */
+// specific added by amlogic to enhance omx to support more audio codec format    
+    OMX_IndexParamAudioAlac = 0x04400000, /**< reference: OMX_AUDIO_PARAM_ALACTYPE */
+    OMX_IndexParamAudioDtshd, /**< reference: OMX_AUDIO_PARAM_DTSHDTYPE */
+    OMX_IndexParamAudioApe,   /**< reference: OMX_AUDIO_PARAM_APETYPE */
+    OMX_IndexParamAudioDolbyAudio,   /**< reference: OMX_AUDIO_PARAM_DOLBYAUDIO */
+    OMX_IndexParamAudioCook,
 
     OMX_IndexConfigAudioMidiImmediateEvent, /**< reference: OMX_AUDIO_CONFIG_MIDIIMMEDIATEEVENTTYPE */
     OMX_IndexConfigAudioMidiControl,        /**< reference: OMX_AUDIO_CONFIG_MIDICONTROLTYPE */
@@ -157,6 +164,7 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexConfigAudioEqualizer,          /**< reference: OMX_AUDIO_CONFIG_EQUALIZERTYPE */
     OMX_IndexConfigAudioReverberation,      /**< reference: OMX_AUDIO_CONFIG_REVERBERATIONTYPE */
     OMX_IndexConfigAudioChannelVolume,      /**< reference: OMX_AUDIO_CONFIG_CHANNELVOLUMETYPE */
+
 
     /* Image specific parameters and configurations */
     OMX_IndexImageStartUnused = 0x05000000,
@@ -196,6 +204,7 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexParamVideoSliceFMO,            /**< reference: OMX_VIDEO_PARAM_AVCSLICEFMO */
     OMX_IndexConfigVideoAVCIntraPeriod,     /**< reference: OMX_VIDEO_CONFIG_AVCINTRAPERIOD */
     OMX_IndexConfigVideoNalSize,            /**< reference: OMX_VIDEO_CONFIG_NALSIZE */
+	OMX_IndexParamVideoInfo,
 
     /* Image & Video common Configurations */
     OMX_IndexCommonStartUnused = 0x07000000,
@@ -259,6 +268,8 @@ typedef enum OMX_INDEXTYPE {
     OMX_IndexKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
     /* Vendor specific area */
     OMX_IndexVendorStartUnused = 0x7F000000,
+    OMX_IndexSoftOMXEnableBuffer,      /** used for h265 native render */
+    OMX_IndexSoftOMXUseBuffer,
     /* Vendor specific structures should be in the range of 0x7F000000 
        to 0x7FFFFFFE.  This range is not broken out by vendor, so
        private indexes are not guaranteed unique and therefore should

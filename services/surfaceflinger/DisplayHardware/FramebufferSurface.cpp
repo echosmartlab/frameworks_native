@@ -15,6 +15,10 @@
  ** limitations under the License.
  */
 
+#define ATRACE_TAG ATRACE_TAG_GRAPHICS
+#include <utils/Trace.h>
+
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -36,13 +40,114 @@
 #include "FramebufferSurface.h"
 #include "HWComposer.h"
 
+
+#ifdef ENABLE_FB_TRIPLE_BUFFERS
+#define NUM_FRAMEBUFFER_SURFACE_BUFFERS (3)
+#else
 #ifndef NUM_FRAMEBUFFER_SURFACE_BUFFERS
 #define NUM_FRAMEBUFFER_SURFACE_BUFFERS (2)
+#endif
 #endif
 
 // ----------------------------------------------------------------------------
 namespace android {
 // ----------------------------------------------------------------------------
+/*
+    Thread For fbpost, for fbpost need wait vsync, which may cost too much time.
+*/
+#ifdef ENABLE_FB_TRIPLE_BUFFERS
+void FBPostServic::onFirstRef(){
+    run("FBPostService", PRIORITY_URGENT_DISPLAY);
+}
+
+bool  FBPostServic::threadLoop(){
+    int timeout_flag = 0;
+
+    do {
+        if(mFBSurface)
+            mFBSurface->PostAndWait();
+        else
+            sleep(1);
+    } while (!timeout_flag);
+    return true;
+}
+
+
+//post framebuffer and wait for the vsync.
+status_t FramebufferSurface::WaitForBuffer(sp<GraphicBuffer>& outBuffer, sp<Fence>& outFence, int* iPreCurrentSlot, sp<GraphicBuffer>& preCurrentBuffer){
+    Mutex::Autolock lock(mMutex);
+    status_t err = NO_ERROR;
+    *iPreCurrentSlot = -1;
+    BufferQueue::BufferItem item;
+
+    if(iPostBufs <= 0)
+        mPostCondition.wait(mMutex);
+
+//    ALOGD("wait buffs %d",iPostBufs);
+    iPostBufs--;
+
+    err = acquireBufferLocked(&item,0);
+    if (err == BufferQueue::NO_BUFFER_AVAILABLE) {
+        outBuffer = mCurrentBuffer;
+        return NO_ERROR;
+    } else if (err != NO_ERROR) {
+        ALOGE("error acquiring buffer: %s (%d)", strerror(-err), err);
+        return err;
+    }
+
+    // If the ufferQueue has freed and reallocated a buffer in mCurrentSlot
+    // then we may have acquired the slot we already own.  If we had released
+    // our current buffer before we call acquireBuffer then that release call
+    // would have returned STALE_BUFFER_SLOT, and we would have called
+    // freeBufferLocked on that slot.  Because the buffer slot has already
+    // been overwritten with the new buffer all we have to do is skip the
+    // releaseBuffer call and we should be in the same state we'd be in if we
+    // had released the old buffer first.
+    if (mCurrentBufferSlot != BufferQueue::INVALID_BUFFER_SLOT &&
+        item.mBuf != mCurrentBufferSlot) {
+        *iPreCurrentSlot = mCurrentBufferSlot;
+        preCurrentBuffer = mCurrentBuffer;
+    }
+    mCurrentBufferSlot = item.mBuf;
+    mCurrentBuffer = mSlots[mCurrentBufferSlot].mGraphicBuffer;
+    outFence = item.mFence;
+    outBuffer = mCurrentBuffer;
+    //ALOGD("To post slot %d, to free slot %d",mCurrentBufferSlot,*iPreCurrentSlot);
+    return NO_ERROR;
+}
+
+void FramebufferSurface::PostAndWait(){
+    ATRACE_CALL();
+
+    sp<GraphicBuffer> buf;
+    sp<GraphicBuffer> bufToFree;
+    sp<Fence> acquireFence;
+    int iSlotToFree = -1;
+    status_t err = WaitForBuffer(buf, acquireFence,&iSlotToFree,bufToFree);
+    if (err != NO_ERROR) {
+        ALOGE("error latching nnext FramebufferSurface buffer: %s (%d)",
+                strerror(-err), err);
+        return;
+    }
+
+    err = mHwc.fbPost(mDisplayType, acquireFence, buf);
+    if (err != NO_ERROR) {
+        ALOGE("PostAndWait::error posting framebuffer: %d", err);
+    }
+    
+    if(iSlotToFree >= 0)//to free before buffer;
+    {
+        Mutex::Autolock lock(mMutex);
+        err = releaseBufferLocked(iSlotToFree, bufToFree, EGL_NO_DISPLAY,
+                EGL_NO_SYNC_KHR);
+        if (err != NO_ERROR && err != BufferQueue::STALE_BUFFER_SLOT) {
+            ALOGE("PostAndWait:: ERROR releasing buffer: %s (%d)", strerror(-err), err);
+        }
+    }
+    return ;
+}
+#endif
+
 
 /*
  * This implements the (main) framebuffer management. This class is used
@@ -66,6 +171,10 @@ FramebufferSurface::FramebufferSurface(HWComposer& hwc, int disp,
     mConsumer->setDefaultBufferFormat(mHwc.getFormat(disp));
     mConsumer->setDefaultBufferSize(mHwc.getWidth(disp),  mHwc.getHeight(disp));
     mConsumer->setDefaultMaxBufferCount(NUM_FRAMEBUFFER_SURFACE_BUFFERS);
+#ifdef ENABLE_FB_TRIPLE_BUFFERS
+    mFB = new FBPostServic(this);
+    iPostBufs = 0;
+#endif
 }
 
 status_t FramebufferSurface::beginFrame() {
@@ -123,6 +232,11 @@ status_t FramebufferSurface::nextBuffer(sp<GraphicBuffer>& outBuffer, sp<Fence>&
 
 // Overrides ConsumerBase::onFrameAvailable(), does not call base class impl.
 void FramebufferSurface::onFrameAvailable() {
+#ifdef ENABLE_FB_TRIPLE_BUFFERS
+    Mutex::Autolock lock(mMutex);
+    iPostBufs++;
+    mPostCondition.signal();
+#else
     sp<GraphicBuffer> buf;
     sp<Fence> acquireFence;
     status_t err = nextBuffer(buf, acquireFence);
@@ -134,7 +248,8 @@ void FramebufferSurface::onFrameAvailable() {
     err = mHwc.fbPost(mDisplayType, acquireFence, buf);
     if (err != NO_ERROR) {
         ALOGE("error posting framebuffer: %d", err);
-    }
+    }    
+#endif
 }
 
 void FramebufferSurface::freeBufferLocked(int slotIndex) {

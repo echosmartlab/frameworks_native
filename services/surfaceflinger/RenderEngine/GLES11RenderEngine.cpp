@@ -245,6 +245,14 @@ void GLES11RenderEngine::endGroup() {
     // doesn't do anything in GLES 1.1
 }
 
+void GLES11RenderEngine::beginGroupSize(float scale_x, float scale_y) {
+    // doesn't do anything in GLES 1.1
+}
+
+void GLES11RenderEngine::endGroupSize() {
+    // doesn't do anything in GLES 1.1
+}
+
 void GLES11RenderEngine::dump(String8& result) {
     RenderEngine::dump(result);
 }

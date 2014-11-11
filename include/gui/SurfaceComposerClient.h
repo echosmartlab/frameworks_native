@@ -124,7 +124,8 @@ public:
     status_t    setCrop(const sp<IBinder>& id, const Rect& crop);
     status_t    setLayerStack(const sp<IBinder>& id, uint32_t layerStack);
     status_t    destroySurface(const sp<IBinder>& id);
-
+    static void setVDisplaySize(int ,uint32_t);
+    static void setDisplay2Stereoscopic(int ,int);
     static void setDisplaySurface(const sp<IBinder>& token,
             const sp<IGraphicBufferProducer>& bufferProducer);
     static void setDisplayLayerStack(const sp<IBinder>& token,

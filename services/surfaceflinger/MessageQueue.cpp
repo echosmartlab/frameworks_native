@@ -109,10 +109,12 @@ void MessageQueue::setEventThread(const sp<EventThread>& eventThread)
             MessageQueue::cb_eventReceiver, this);
 }
 
-void MessageQueue::waitMessage() {
+void MessageQueue::waitMessage(int timeoutms) {
+    int timeout_flag = 0;
+    
     do {
         IPCThreadState::self()->flushCommands();
-        int32_t ret = mLooper->pollOnce(-1);
+        int32_t ret = mLooper->pollOnce(timeoutms);
         switch (ret) {
             case ALOOPER_POLL_WAKE:
             case ALOOPER_POLL_CALLBACK:
@@ -121,13 +123,14 @@ void MessageQueue::waitMessage() {
                 ALOGE("ALOOPER_POLL_ERROR");
             case ALOOPER_POLL_TIMEOUT:
                 // timeout (should not happen)
+                timeout_flag = 1;
                 continue;
             default:
                 // should not happen
                 ALOGE("Looper::pollOnce() returned unknown status %d", ret);
                 continue;
         }
-    } while (true);
+    } while (!timeout_flag);
 }
 
 status_t MessageQueue::postMessage(

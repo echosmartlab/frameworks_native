@@ -45,7 +45,9 @@
 #include "DisplayHardware/HWComposer.h"
 
 #include "RenderEngine/RenderEngine.h"
-
+#include <linux/compiler.h>
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
 #define DEBUG_RESIZE    0
 
 namespace android {
@@ -72,13 +74,17 @@ Layer::Layer(SurfaceFlinger* flinger, const sp<Client>& client,
         mCurrentOpacity(true),
         mRefreshPending(false),
         mFrameLatencyNeeded(false),
+        isVideohole(false),
         mFiltering(false),
         mNeedsFiltering(false),
-        mMesh(Mesh::TRIANGLE_FAN, 4, 2, 2),
+        //mMesh(Mesh::TRIANGLE_FAN, 4, 2, 2),
+        mMesh(Mesh::TRIANGLE_FAN, 8, 2, 2),
         mSecure(false),
         mProtectedByApp(false),
         mHasSurface(false),
-        mClientRef(client)
+        mClientRef(client),
+        mIsBootAnimation(false),
+        mIsQuickBootAnimation(false)
 {
     mCurrentCrop.makeInvalid();
     mFlinger->getRenderEngine().genTextures(1, &mTextureName);
@@ -129,6 +135,12 @@ void Layer::onFirstRef() {
 
     const sp<const DisplayDevice> hw(mFlinger->getDefaultDisplayDevice());
     updateTransformHint(hw);
+    mIsBootAnimation =  (0 == strcmp(mName.string(),"BootAnimation"));
+    if(mIsBootAnimation){
+         mBootAnimTr = hw->getTransform();
+    }
+
+    mIsQuickBootAnimation =  (0 == strcmp(mName.string(),"qbd"));
 }
 
 Layer::~Layer() {
@@ -190,8 +202,8 @@ status_t Layer::setBuffers( uint32_t w, uint32_t h,
     mSecure = (flags & ISurfaceComposerClient::eSecure) ? true : false;
     mProtectedByApp = (flags & ISurfaceComposerClient::eProtectedByApp) ? true : false;
     mOpaqueLayer = (flags & ISurfaceComposerClient::eOpaque);
+	isVideohole = (flags & ISurfaceComposerClient::eVideoHole);
     mCurrentOpacity = getOpacityForFormat(format);
-
     mSurfaceFlingerConsumer->setDefaultBufferSize(w, h);
     mSurfaceFlingerConsumer->setDefaultBufferFormat(format);
     mSurfaceFlingerConsumer->setConsumerUsageBits(getEffectiveUsage(0));
@@ -445,6 +457,35 @@ void Layer::draw(const sp<const DisplayDevice>& hw, const Region& clip) const {
     onDraw(hw, clip);
 }
 
+void Layer::drawVideoHole(const sp<const DisplayDevice>& hw, const Rect& rect) const
+{
+#if 0 //user prop to set the videohole is not a good idea, will remove it.
+    char property[PROPERTY_VALUE_MAX];
+    property_get("hw.videohole.x", property, "0") ;
+    int x=atoi(property)>0?atoi(property):x0; 
+    property_get("hw.videohole.y", property, "0") ;
+    int y=atoi(property)>0?atoi(property):y0; 
+    property_get("hw.videohole.width", property, "0"); 
+    int w=atoi(property)>0?atoi(property):w0; 
+    property_get("hw.videohole.height", property, "0"); 
+    int h=atoi(property)>0?atoi(property):h0; 
+    if(atoi(property) == 380){
+        amsysfs_set_sysfs_str(REQUEST_VIDEO_HOLE, "0 0 0 0 0") ;
+        amsysfs_set_sysfs_str("/sys/class/graphics/fb0/request2XScale", "2") ;
+    }
+    if(w<=0||h<=0)return;
+#endif
+
+    RenderEngine& engine(mFlinger->getRenderEngine());
+    //to clear a hole on fb
+    const uint32_t y = hw->getHeight() - (rect.top + rect.height());
+    engine.setScissor(rect.left, y, rect.width(), rect.height());
+    engine.clearWithColor(0,0,0,0);
+    engine.setScissor(0, 0, hw->getWidth(), hw->getHeight());
+    engine.disableScissor();
+}
+
+
 void Layer::draw(const sp<const DisplayDevice>& hw) {
     onDraw( hw, Region(hw->bounds()) );
 }
@@ -452,6 +493,25 @@ void Layer::draw(const sp<const DisplayDevice>& hw) {
 void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip) const
 {
     ATRACE_CALL();
+
+    if(isVideoHole())
+    {
+    #if 0 //why we need it ??
+        char property[PROPERTY_VALUE_MAX];
+        property_get("hw.videohole.enable", property, "true");
+    #endif
+        //ALOGW("----------videohole	 %i %i--------",i,count);
+        Region::const_iterator it = clip.begin();
+        Region::const_iterator const end = clip.end();
+        while (it != end) {
+            const Rect& r = *it;
+            ALOGW("drawVideoHole clip %i %i %i %i ",r.left,r.top,r.right,r.bottom);
+            drawVideoHole(hw, r);
+            it++;
+        }
+        return ;
+    }
+
 
     if (CC_UNLIKELY(mActiveBuffer == 0)) {
         // the texture has not been created yet, this Layer has
@@ -590,11 +650,39 @@ void Layer::drawWithOpenGL(
     // TODO: we probably want to generate the texture coords with the mesh
     // here we assume that we only have 4 vertices
     Mesh::VertexArray<vec2> texCoords(mMesh.getTexCoordArray<vec2>());
-    texCoords[0] = vec2(left, 1.0f - top);
-    texCoords[1] = vec2(left, 1.0f - bottom);
-    texCoords[2] = vec2(right, 1.0f - bottom);
-    texCoords[3] = vec2(right, 1.0f - top);
 
+    const SurfaceFlinger::DisplayDeviceState& disp(mFlinger->mCurrentState.displays.valueAt(0));
+    if(unlikely(disp.d3Format==REQUEST_3D_FORMAT_SIDE_BY_SIDE ))
+    {
+        texCoords[0] = vec2(left, 1.0f - top);
+        texCoords[1] = vec2(left, 1.0f - bottom);
+        texCoords[2] = vec2(right, 1.0f - bottom);
+        texCoords[3] = vec2(right, 1.0f - top);
+        texCoords[4] = vec2(left, 1.0f - top);
+        texCoords[5] = vec2(left, 1.0f - bottom);
+        texCoords[6] = vec2(right, 1.0f - bottom);
+        texCoords[7] = vec2(right, 1.0f - top);
+        mMesh.setDrawCount(8);
+    }else if(unlikely(disp.d3Format==REQUEST_3D_FORMAT_TOP_BOTTOM ))
+    {
+        texCoords[0] = vec2(left, 1.0f - top);
+        texCoords[1] = vec2(left, 1.0f - bottom);
+        texCoords[2] = vec2(right, 1.0f - bottom);
+        texCoords[3] = vec2(right, 1.0f - top);
+        texCoords[4] = vec2(left, 1.0f - top);
+        texCoords[5] = vec2(left, 1.0f - bottom);
+        texCoords[6] = vec2(right, 1.0f - bottom);
+        texCoords[7] = vec2(right, 1.0f - top);
+        mMesh.setDrawCount(8);
+
+    }else 
+    {
+        texCoords[0] = vec2(left, 1.0f - top);
+        texCoords[1] = vec2(left, 1.0f - bottom);
+        texCoords[2] = vec2(right, 1.0f - bottom);
+        texCoords[3] = vec2(right, 1.0f - top);
+        mMesh.setDrawCount(4);
+    }
     RenderEngine& engine(mFlinger->getRenderEngine());
     engine.setupLayerBlending(mPremultipliedAlpha, isOpaque(), s.alpha);
     engine.drawMesh(mMesh);
@@ -630,6 +718,11 @@ bool Layer::getOpacityForFormat(uint32_t format) {
     return true;
 }
 
+bool Layer::isVideoHole() const
+{	
+    return isVideohole;
+} 
+
 // ----------------------------------------------------------------------------
 // local state
 // ----------------------------------------------------------------------------
@@ -637,8 +730,12 @@ bool Layer::getOpacityForFormat(uint32_t format) {
 void Layer::computeGeometry(const sp<const DisplayDevice>& hw, Mesh& mesh) const
 {
     const Layer::State& s(getDrawingState());
-    const Transform tr(hw->getTransform() * s.transform);
+    //const Transform tr(hw->getTransform() * s.transform);
+    //Don`t transform for BootAnimation
+    //const Transform tr( !mIsBootAnimation ? (hw->getTransform()*s.transform) : (s.transform*mBootAnimTr));
+    const Transform tr( mIsQuickBootAnimation ? s.transform : ( !mIsBootAnimation ? (hw->getTransform()*s.transform) : (s.transform*mBootAnimTr) ) );
     const uint32_t hw_h = hw->getHeight();
+    const uint32_t hw_w = hw->getWidth();
     Rect win(s.active.w, s.active.h);
     if (!s.active.crop.isEmpty()) {
         win.intersect(s.active.crop, &win);
@@ -647,22 +744,62 @@ void Layer::computeGeometry(const sp<const DisplayDevice>& hw, Mesh& mesh) const
     win = reduce(win, s.activeTransparentRegion);
 
     Mesh::VertexArray<vec2> position(mesh.getPositionArray<vec2>());
-    position[0] = tr.transform(win.left,  win.top);
-    position[1] = tr.transform(win.left,  win.bottom);
-    position[2] = tr.transform(win.right, win.bottom);
-    position[3] = tr.transform(win.right, win.top);
-    for (size_t i=0 ; i<4 ; i++) {
+    
+    const SurfaceFlinger::DisplayDeviceState& disp(mFlinger->mCurrentState.displays.valueAt(0));
+    Rect r=hw->getViewport();
+    uint32_t tmp_width = r.width();
+    uint32_t tmp_height = r.height();
+    
+    uint32_t count= mesh.getVertexCount();
+
+    if(unlikely(disp.d3Format==REQUEST_3D_FORMAT_SIDE_BY_SIDE && count ==8)) // left-right
+    {
+        position[0] = tr.transform(win.left/2,  win.top);
+        position[1] = tr.transform(win.left/2,  win.bottom);
+        position[2] = tr.transform(win.right/2, win.bottom);
+        position[3] = tr.transform(win.right/2, win.top);
+        position[4] = tr.transform((tmp_width+win.left)/2,  win.top);
+        position[5] = tr.transform((tmp_width+win.left)/2, win.bottom);
+        position[6] = tr.transform((tmp_width+win.right)/2, win.bottom);
+        position[7] = tr.transform((tmp_width+win.right)/2, win.top);
+    }else if(unlikely(disp.d3Format==REQUEST_3D_FORMAT_TOP_BOTTOM  && count ==8)) //top-bottom,cupute the android-window axis
+    {
+        position[0] = tr.transform(win.left,  win.top/2);
+        position[1] = tr.transform(win.left,  win.bottom/2);
+        position[2] = tr.transform(win.right, win.bottom/2);
+        position[3] = tr.transform(win.right, win.top/2);
+        position[4] = tr.transform(win.left,  (tmp_height+win.top)/2);
+        position[5] = tr.transform(win.left,  (tmp_height+win.bottom)/2);
+        position[6] = tr.transform(win.right, (tmp_height+win.bottom)/2);
+        position[7] = tr.transform(win.right, (tmp_height+win.top)/2);
+    }else 
+    {
+        position[0] = tr.transform(win.left,  win.top);
+        position[1] = tr.transform(win.left,  win.bottom);
+        position[2] = tr.transform(win.right, win.bottom);
+        position[3] = tr.transform(win.right, win.top);
+    }
+
+    for (size_t i=0 ; i<mesh.getVertexCount(); i++) {
         position[i].y = hw_h - position[i].y;
     }
 }
 
 bool Layer::isOpaque() const
 {
+    //const Layer::State& front(drawingState());
+
     // if we don't have a buffer yet, we're translucent regardless of the
     // layer's opaque flag.
     if (mActiveBuffer == 0) {
         return false;
     }
+
+    //TODO not needed because of mOpaqueLayer?
+    /*
+    if (front.flags & ISurfaceComposer::eLayerOpaque) {
+        return true;
+    }*/
 
     // if the layer has the opaque flag, then we're always opaque,
     // otherwise we use the current buffer's format.
@@ -825,6 +962,17 @@ bool Layer::setPosition(float x, float y) {
     if (mCurrentState.transform.tx() == x && mCurrentState.transform.ty() == y)
         return false;
     mCurrentState.sequence++;
+
+	/*---Add for 3D case,the screen is divided into 2 part,so need to set the vertext in half----*/
+	const SurfaceFlinger::DisplayDeviceState& disp(mFlinger->mCurrentState.displays.valueAt(0));
+    if(unlikely(disp.d3Format==REQUEST_3D_FORMAT_SIDE_BY_SIDE)) {
+        x = x/(float)2.0;
+		if(false) ALOGW("Set the Vertex(%f,%f) in half!!\n ",x,  y);
+    }else if(unlikely(disp.d3Format==REQUEST_3D_FORMAT_TOP_BOTTOM)){
+        y = y/(float)2.0;
+		if(false) ALOGW("Set the Vertex(%f,%f) in half!!\n ",x,  y);
+	}
+	
     mCurrentState.transform.set(x, y);
     setTransactionFlags(eTransactionNeeded);
     return true;
@@ -934,7 +1082,7 @@ void Layer::onPostComposition() {
 bool Layer::isVisible() const {
     const Layer::State& s(mDrawingState);
     return !(s.flags & layer_state_t::eLayerHidden) && s.alpha
-            && (mActiveBuffer != NULL);
+            && ( (mActiveBuffer != NULL) || isVideoHole());
 }
 
 Region Layer::latchBuffer(bool& recomputeVisibleRegions)

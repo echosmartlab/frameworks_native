@@ -46,6 +46,7 @@ public:
         eOpaque             = 0x00000400,
         eProtectedByApp     = 0x00000800,
         eProtectedByDRM     = 0x00001000,
+        eVideoHole			= 0x00002000,
 
         eFXSurfaceNormal    = 0x00000000,
         eFXSurfaceDim       = 0x00020000,

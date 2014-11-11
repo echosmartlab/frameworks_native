@@ -101,7 +101,7 @@ public:
     void init(const sp<SurfaceFlinger>& flinger);
     void setEventThread(const sp<EventThread>& events);
 
-    void waitMessage();
+    void waitMessage(int timeoutms = -1);
     status_t postMessage(const sp<MessageBase>& message, nsecs_t reltime=0);
 
     // sends INVALIDATE message at next VSYNC

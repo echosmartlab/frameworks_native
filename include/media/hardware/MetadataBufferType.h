@@ -83,7 +83,24 @@ typedef enum {
     kMetadataBufferTypeGrallocSource = 1,
 
     // Add more here...
-
+    /*
+     * kMetadataBufferTypeCanvasSource is used to indicate that
+     * the payload of the metadata buffers can be interpreted as
+     * a canvas index.
+     * So in this case,the metadata that the encoder receives
+     * will have a byte stream that consists of two parts:
+     * 1. First, there is an integer indicating that it is a Canvas
+     * source (kMetadataBufferTypeCanvasSource)
+     * 2. This is followed by the 4 bytes that is a pointer to the
+     * user buffer ptr. 
+     * 3. This is followed by the 4 bytes that is a index to the
+     * canvas buffer. The encoder needs to interpret this canvas index
+     * and encode the frames.
+     * --------------------------------------------------------------------------------
+     * |  kMetadataBufferTypeCanvasSource | buffer ptr (4 bytes) | canvas index (4 bytes) |
+     * --------------------------------------------------------------------------------
+     */
+    kMetadataBufferTypeCanvasSource = 2,
 } MetadataBufferType;
 
 #ifdef __cplusplus

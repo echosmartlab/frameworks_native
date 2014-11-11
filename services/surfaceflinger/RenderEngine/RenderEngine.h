@@ -103,6 +103,9 @@ public:
     virtual void beginGroup(const mat4& colorTransform) = 0;
     virtual void endGroup() = 0;
 
+    virtual void beginGroupSize(float scale_x, float scale_y) = 0;
+    virtual void endGroupSize() = 0;
+
     // queries
     virtual size_t getMaxTextureSize() const = 0;
     virtual size_t getMaxViewportDims() const = 0;

@@ -23,6 +23,7 @@
 
 #include <utils/RefBase.h>
 #include <utils/Log.h>
+#include <cutils/properties.h>
 
 #include <ui/DisplayInfo.h>
 #include <ui/PixelFormat.h>
@@ -73,6 +74,11 @@ DisplayDevice::DisplayDevice(
       mLayerStack(NO_LAYER_STACK),
       mOrientation()
 {
+    char value[PROPERTY_VALUE_MAX];
+    property_get("ro.sf.hwrotation", value, "0");
+    if(180 ==  atoi(value)){
+        mScreenRotation180 = true;
+    }
     mNativeWindow = new Surface(producer, false);
     ANativeWindow* const window = mNativeWindow.get();
 
@@ -156,19 +162,19 @@ int DisplayDevice::getHeight() const {
     return mDisplayHeight;
 }
 
+void DisplayDevice::setDisplayName(const String8& displayName) {
+    if (!displayName.isEmpty()) {
+        // never override the name with an empty name
+        mDisplayName = displayName;
+    }
+}
+
 PixelFormat DisplayDevice::getFormat() const {
     return mFormat;
 }
 
 EGLSurface DisplayDevice::getEGLSurface() const {
     return mSurface;
-}
-
-void DisplayDevice::setDisplayName(const String8& displayName) {
-    if (!displayName.isEmpty()) {
-        // never override the name with an empty name
-        mDisplayName = displayName;
-    }
 }
 
 uint32_t DisplayDevice::getPageFlipCount() const {
@@ -367,6 +373,7 @@ status_t DisplayDevice::orientationToTransfrom(
         int orientation, int w, int h, Transform* tr)
 {
     uint32_t flags = 0;
+
     switch (orientation) {
     case DisplayState::eOrientationDefault:
         flags = Transform::ROT_0;
@@ -383,6 +390,7 @@ status_t DisplayDevice::orientationToTransfrom(
     default:
         return BAD_VALUE;
     }
+
     tr->set(flags, w, h);
     return NO_ERROR;
 }
@@ -396,6 +404,9 @@ void DisplayDevice::setProjection(int orientation,
     const int h = mDisplayHeight;
 
     Transform R;
+    if(mScreenRotation180){
+        orientation = (orientation+DisplayState::eOrientation180)%4;
+    }
     DisplayDevice::orientationToTransfrom(orientation, w, h, &R);
 
     if (!frame.isValid()) {

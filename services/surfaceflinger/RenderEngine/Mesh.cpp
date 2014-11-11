@@ -19,7 +19,7 @@
 namespace android {
 
 Mesh::Mesh(Primitive primitive, size_t vertexCount, size_t vertexSize, size_t texCoordSize)
-    : mVertexCount(vertexCount), mVertexSize(vertexSize), mTexCoordsSize(texCoordSize),
+    : mVertexCount(vertexCount), mVertexSize(vertexSize), mTexCoordsSize(texCoordSize),mDrawCount(vertexCount),
       mPrimitive(primitive)
 {
     mVertices = new float[(vertexSize + texCoordSize) * vertexCount];
@@ -56,6 +56,16 @@ size_t Mesh::getVertexCount() const {
 
 size_t Mesh::getVertexSize() const {
     return mVertexSize;
+}
+size_t Mesh::setDrawCount(size_t count )
+{
+    if(count<=mVertexCount)
+        mDrawCount = count;
+    return mDrawCount;
+}
+size_t Mesh::getDrawCount() const
+{
+    return mDrawCount;
 }
 
 size_t Mesh::getTexCoordsSize() const {

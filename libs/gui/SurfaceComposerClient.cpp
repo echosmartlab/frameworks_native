@@ -166,6 +166,8 @@ public:
             uint32_t orientation,
             const Rect& layerStackRect,
             const Rect& displayRect);
+    void setVDisplaySize(const sp<IBinder>& token, uint32_t format );
+    void setDisplay2Stereoscopic(const sp<IBinder>& token,int format);
 
     static void setAnimationTransaction() {
         Composer::getInstance().setAnimationTransactionImpl();
@@ -309,6 +311,16 @@ status_t Composer::setFlags(const sp<SurfaceComposerClient>& client,
     layer_state_t* s = getLayerStateLocked(client, id);
     if (!s)
         return BAD_INDEX;
+
+//TODO
+#if 0
+    if (mask == ISurfaceComposer::eOpaque) {
+        mask = ISurfaceComposer::eLayerOpaque;
+        if (flags == ISurfaceComposer::eOpaque)
+            flags = ISurfaceComposer::eLayerOpaque;
+    }
+#endif
+
     s->what |= layer_state_t::eVisibilityChanged;
     s->flags &= ~mask;
     s->flags |= (flags & mask);
@@ -399,6 +411,25 @@ void Composer::setDisplaySurface(const sp<IBinder>& token,
     s.surface = bufferProducer;
     s.what |= DisplayState::eSurfaceChanged;
 }
+
+void Composer::setVDisplaySize(const sp<IBinder>& token, uint32_t format )
+{
+    Mutex::Autolock _l(mLock);
+    DisplayState& s(getDisplayStateLocked(token));
+    s.vFormat = format;
+
+    s.what |= DisplayState::eDisplaySizeChanged;
+    //mForceSynchronous = true;
+}
+
+void  Composer::setDisplay2Stereoscopic(const sp<IBinder>& token,int format)
+{
+    Mutex::Autolock _l(mLock);
+    DisplayState& s(getDisplayStateLocked(token));
+    s.want3D= format;
+    s.what |= DisplayState::eWant3D;
+}
+
 
 void Composer::setDisplayLayerStack(const sp<IBinder>& token,
         uint32_t layerStack) {
@@ -591,6 +622,21 @@ void SurfaceComposerClient::setDisplaySurface(const sp<IBinder>& token,
 void SurfaceComposerClient::setDisplayLayerStack(const sp<IBinder>& token,
         uint32_t layerStack) {
     Composer::getInstance().setDisplayLayerStack(token, layerStack);
+}
+
+void SurfaceComposerClient::setVDisplaySize(int displayid,uint32_t format)
+{
+    ALOGW("setVDisplaySize---%i %u",displayid,format);
+    sp<IBinder> token = getBuiltInDisplay(int32_t(displayid));
+    Composer::getInstance().setVDisplaySize(token, format);
+}
+
+void  SurfaceComposerClient::setDisplay2Stereoscopic(int displayid,int format)
+{
+    ALOGW("setDisplay2Stereoscopic---%i %i ",displayid,format);
+    sp<IBinder> token = getBuiltInDisplay(int32_t(displayid));
+    Composer::getInstance().setDisplay2Stereoscopic(token, format);
+
 }
 
 void SurfaceComposerClient::setDisplayProjection(const sp<IBinder>& token,

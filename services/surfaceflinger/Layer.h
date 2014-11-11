@@ -174,6 +174,8 @@ public:
      */
     virtual bool isFixedSize() const;
 
+    virtual bool isVideoHole() const;
+
 protected:
     /*
      * onDraw - draws the surface.
@@ -323,7 +325,7 @@ private:
     void clearWithOpenGL(const sp<const DisplayDevice>& hw, const Region& clip,
             float r, float g, float b, float alpha) const;
     void drawWithOpenGL(const sp<const DisplayDevice>& hw, const Region& clip) const;
-
+    void drawVideoHole(const sp<const DisplayDevice>& hw, const Rect& rect) const;
 
     // -----------------------------------------------------------------------
 
@@ -354,6 +356,7 @@ private:
     bool mCurrentOpacity;
     bool mRefreshPending;
     bool mFrameLatencyNeeded;
+    bool isVideohole;
     // Whether filtering is forced on or not
     bool mFiltering;
     // Whether filtering is needed b/c of the drawingstate
@@ -372,6 +375,10 @@ private:
     // Set to true once we've returned this surface's handle
     mutable bool mHasSurface;
     const wp<Client> mClientRef;
+
+    bool mIsBootAnimation;
+    bool mIsQuickBootAnimation;
+    Transform mBootAnimTr;
 };
 
 // ---------------------------------------------------------------------------

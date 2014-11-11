@@ -24,6 +24,12 @@
 
 #include "DisplaySurface.h"
 
+#include <utils/threads.h>
+#include <utils/Timers.h>
+#include <utils/Looper.h>
+#include <binder/IPCThreadState.h>
+
+
 // ---------------------------------------------------------------------------
 namespace android {
 // ---------------------------------------------------------------------------
@@ -34,8 +40,32 @@ class HWComposer;
 
 // ---------------------------------------------------------------------------
 
+#ifdef ENABLE_FB_TRIPLE_BUFFERS
+class FramebufferSurface;
+class FBPostServic : public Thread{
+public:
+    FBPostServic(FramebufferSurface* fb){ mFBSurface = fb;};
+    
+private:
+    /* ------------------------------------------------------------------------
+     * Thread interface
+     */
+    virtual bool threadLoop();
+    virtual void onFirstRef();
+
+ private:
+    FramebufferSurface* mFBSurface;
+};
+
+#endif
+
+
 class FramebufferSurface : public ConsumerBase,
                            public DisplaySurface {
+#ifdef ENABLE_FB_TRIPLE_BUFFERS
+friend class FBPostServic;
+#endif
+
 public:
     FramebufferSurface(HWComposer& hwc, int disp, const sp<IGraphicBufferConsumer>& consumer);
 
@@ -76,7 +106,16 @@ private:
 
     // Hardware composer, owned by SurfaceFlinger.
     HWComposer& mHwc;
+
+#ifdef ENABLE_FB_TRIPLE_BUFFERS
+    status_t WaitForBuffer(sp<GraphicBuffer>& outBuffer, sp<Fence>& outFence, int* iPreCurrentSlot, sp<GraphicBuffer>& preCurrentBuffer);
+    void PostAndWait();
+    int iPostBufs;
+    mutable Condition mPostCondition;
+    sp<FBPostServic> mFB;
+#endif
 };
+
 
 // ---------------------------------------------------------------------------
 }; // namespace android

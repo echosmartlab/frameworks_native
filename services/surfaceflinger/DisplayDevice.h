@@ -161,6 +161,7 @@ public:
     void dump(String8& result) const;
 
 private:
+	void init(EGLConfig config);
     /*
      *  Constants, set during initialization
      */
@@ -214,6 +215,7 @@ private:
     Rect mScissor;
     Transform mGlobalTransform;
     bool mNeedsFiltering;
+    bool mScreenRotation180;
 };
 
 }; // namespace android

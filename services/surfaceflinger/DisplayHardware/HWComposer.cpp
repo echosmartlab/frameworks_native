@@ -145,7 +145,7 @@ HWComposer::HWComposer(
             mHwc->registerProcs(mHwc, &mCBContext->procs);
         }
 
-        // don't need a vsync thread if we have a hardware composer
+        // don't need a vsync thread because we have a hardware composer
         needVSyncThread = false;
         // always turn vsync off when we start
         eventControl(HWC_DISPLAY_PRIMARY, HWC_EVENT_VSYNC, 0);
@@ -647,6 +647,9 @@ status_t HWComposer::prepare() {
                         disp.hasFbComp = true;
                     }
                     if (l.compositionType == HWC_OVERLAY) {
+                        //stark.li++: we need set disp.haFbComp to true when use aml video player
+                        disp.hasFbComp = true;
+                        //stark.li--
                         disp.hasOvComp = true;
                     }
                 }

@@ -20,6 +20,7 @@
 #include <gui/IGraphicBufferProducer.h>
 #include <gui/BufferQueue.h>
 
+#include <gui/ISurfaceTexture.h>
 #include <ui/ANativeObjectBase.h>
 #include <ui/Region.h>
 

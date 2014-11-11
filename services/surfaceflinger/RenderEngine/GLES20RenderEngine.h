@@ -47,6 +47,8 @@ class GLES20RenderEngine : public RenderEngine {
         GLuint fbo;
         GLuint width;
         GLuint height;
+        GLfloat scale_x;
+        GLfloat scale_y;
         mat4 colorTransform;
     };
 
@@ -77,6 +79,9 @@ protected:
 
     virtual void beginGroup(const mat4& colorTransform);
     virtual void endGroup();
+
+    virtual void beginGroupSize(float scale_x, float scale_y);
+    virtual void endGroupSize();
 
     virtual size_t getMaxTextureSize() const;
     virtual size_t getMaxViewportDims() const;

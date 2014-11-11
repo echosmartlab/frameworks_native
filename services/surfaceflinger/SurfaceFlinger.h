@@ -64,6 +64,8 @@ class DisplayEventConnection;
 class EventThread;
 class IGraphicBufferAlloc;
 class Layer;
+//class LayerBase;
+class LayerBaseClient;
 class LayerDim;
 class Surface;
 class RenderEngine;
@@ -75,8 +77,14 @@ enum {
     eTransactionNeeded        = 0x01,
     eTraversalNeeded          = 0x02,
     eDisplayTransactionNeeded = 0x04,
-    eTransactionMask          = 0x07
+	eOtherNeeded			   = 0x08,
+	eWant3DNeeded			   = 0x10,
+	eTransactionMask		   = 0x1f
 };
+static  int STEREOSCOPIC_3D_FORMAT_OFF=0;
+static  int REQUEST_3D_FORMAT_SIDE_BY_SIDE=8;
+static  int REQUEST_3D_FORMAT_TOP_BOTTOM=16;
+
 
 class SurfaceFlinger : public BnSurfaceComposer,
                        private IBinder::DeathRecipient,
@@ -98,7 +106,24 @@ public:
     enum {
         EVENT_VSYNC = HWC_EVENT_VSYNC
     };
+    enum{
+        REQUEST_DISPLAY_FORMAT_1080P=0,
+        REQUEST_DISPLAY_FORMAT_1080I,
+        REQUEST_DISPLAY_FORMAT_720P,
+        REQUEST_DISPLAY_FORMAT_720I,
+        REQUEST_DISPLAY_FORMAT_576P,
+        REQUEST_DISPLAY_FORMAT_576I,
+        REQUEST_DISPLAY_FORMAT_480P,
+        REQUEST_DISPLAY_FORMAT_480I,
+        REQUEST_DISPLAY_FORMAT_MAX
+    };
 
+    enum{
+        DISPLAY_X=0,
+        DISPLAY_Y,
+        DISPLAY_WIDTH,
+        DISPLAY_HEIGHT
+    };
     // post an asynchronous message to the main thread
     status_t postMessageAsync(const sp<MessageBase>& msg, nsecs_t reltime = 0, uint32_t flags = 0);
 
@@ -107,6 +132,18 @@ public:
 
     // force full composition on all displays
     void repaintEverything();
+
+    /*
+    // renders content on given display to a texture. thread-safe version.
+    status_t renderScreenToTexture(uint32_t layerStack, GLuint* textureName,
+        GLfloat* uOut, GLfloat* vOut);
+
+    // renders content on given display to a texture, w/o acquiring main lock
+    status_t renderScreenToTextureLocked(uint32_t layerStack, GLuint* textureName,
+        GLfloat* uOut, GLfloat* vOut);
+    status_t renderScreenToTextureLocked2(uint32_t layerStack,GLuint* textureName,
+        GLfloat* uOut, GLfloat* vOut);
+        */
 
     // returns the default Display
     sp<const DisplayDevice> getDefaultDisplayDevice() const {
@@ -137,6 +174,8 @@ private:
     friend class Client;
     friend class DisplayEventConnection;
     friend class Layer;
+	friend class LayerBase;
+    friend class LayerBaseClient;
     friend class SurfaceTextureLayer;
 
     // This value is specified in number of frames.  Log frame stats at most
@@ -167,6 +206,10 @@ private:
         sp<IGraphicBufferProducer> surface;
         uint32_t layerStack;
         Rect viewport;
+        uint32_t vFormat;
+		uint32_t vX,vY,vWidth,vHeight;
+		uint32_t d3Format;
+		bool need2XScale;
         Rect frame;
         uint8_t orientation;
         String8 displayName;
@@ -176,6 +219,8 @@ private:
     struct State {
         LayerVector layersSortedByZ;
         DefaultKeyedVector< wp<IBinder>, DisplayDeviceState> displays;
+        uint8_t         orientation;
+        uint8_t         orientationFlags;
     };
 
     /* ------------------------------------------------------------------------
@@ -258,6 +303,7 @@ private:
     uint32_t getTransactionFlags(uint32_t flags);
     uint32_t peekTransactionFlags(uint32_t flags);
     uint32_t setTransactionFlags(uint32_t flags);
+    uint32_t getDisplayFormatInfo(uint32_t format , uint32_t type);
     void commitTransaction();
     uint32_t setClientStateLocked(const sp<Client>& client, const layer_state_t& s);
     uint32_t setDisplayStateLocked(const DisplayState& s);
@@ -330,6 +376,8 @@ private:
     // called when starting, or restarting after system_server death
     void initializeDisplays();
 
+    void unblankSignalRefresh();
+
     // Create an IBinder for a builtin display and add it to current state
     void createBuiltinDisplayLocked(DisplayDevice::DisplayType type);
 
@@ -375,6 +423,8 @@ private:
 
     void postFramebuffer();
     void drawWormhole(const sp<const DisplayDevice>& hw, const Region& region) const;
+    //void drawVideoHole(int x,int y,int w,int h);
+    bool request2XScaleChanged(void);
 
     /* ------------------------------------------------------------------------
      * Display management
@@ -448,6 +498,10 @@ private:
     DefaultKeyedVector< wp<IBinder>, sp<DisplayDevice> > mDisplays;
 
     // don't use a lock for these, we don't care
+    nsecs_t mDebugFpsStartTime;
+    nsecs_t mDebugFpsLastTime;
+    long long mDebugFpsCount;
+    int mDebugFps;
     int mDebugRegion;
     int mDebugDDMS;
     int mDebugDisableHWC;
@@ -478,6 +532,16 @@ private:
 
     Daltonizer mDaltonizer;
     bool mDaltonize;
+
+    bool mNeed2XScale;
+    //add for scale
+    uint32_t mQuestX;
+    uint32_t mQuestY;
+    uint32_t mQuestWidth;
+    uint32_t mQuestHeight;
+    uint32_t mFormat;
+    uint32_t  last_format;
+    bool last_need2xscale;
 };
 
 }; // namespace android

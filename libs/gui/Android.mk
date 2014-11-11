@@ -18,6 +18,7 @@ LOCAL_SRC_FILES:= \
 	IGraphicBufferProducer.cpp \
 	ISensorEventConnection.cpp \
 	ISensorServer.cpp \
+	ISurfaceTexture.cpp \
 	ISurfaceComposer.cpp \
 	ISurfaceComposerClient.cpp \
 	LayerState.cpp \
@@ -45,9 +46,25 @@ LOCAL_MODULE:= libgui
 ifeq ($(TARGET_BOARD_PLATFORM), tegra)
 	LOCAL_CFLAGS += -DDONT_USE_FENCE_SYNC
 endif
+
+ifeq ($(TARGET_BOARD_PLATFORM), s5pc110)
+	LOCAL_CFLAGS += -DUSE_FENCE_SYNC
+endif
+ifeq ($(TARGET_BOARD_PLATFORM), exynos5)
+	LOCAL_CFLAGS += -DUSE_NATIVE_FENCE_SYNC
+	LOCAL_CFLAGS += -DUSE_WAIT_SYNC
+endif
+ifneq ($(filter generic%,$(TARGET_DEVICE)),)
+    # Emulator build
+    LOCAL_CFLAGS += -DUSE_FENCE_SYNC
+endif
+
+LOCAL_CFLAGS += -DUSE_NATIVE_FENCE_SYNC
+
 ifeq ($(TARGET_BOARD_PLATFORM), tegra3)
 	LOCAL_CFLAGS += -DDONT_USE_FENCE_SYNC
 endif
+
 
 include $(BUILD_SHARED_LIBRARY)
 
