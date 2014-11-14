@@ -74,11 +74,6 @@ DisplayDevice::DisplayDevice(
       mLayerStack(NO_LAYER_STACK),
       mOrientation()
 {
-    char value[PROPERTY_VALUE_MAX];
-    property_get("ro.sf.hwrotation", value, "0");
-    if(180 ==  atoi(value)){
-        mScreenRotation180 = true;
-    }
     mNativeWindow = new Surface(producer, false);
     ANativeWindow* const window = mNativeWindow.get();
 
@@ -404,9 +399,6 @@ void DisplayDevice::setProjection(int orientation,
     const int h = mDisplayHeight;
 
     Transform R;
-    if(mScreenRotation180){
-        orientation = (orientation+DisplayState::eOrientation180)%4;
-    }
     DisplayDevice::orientationToTransfrom(orientation, w, h, &R);
 
     if (!frame.isValid()) {

@@ -215,7 +215,6 @@ private:
     Rect mScissor;
     Transform mGlobalTransform;
     bool mNeedsFiltering;
-    bool mScreenRotation180;
 };
 
 }; // namespace android
