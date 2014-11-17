@@ -82,9 +82,7 @@ Layer::Layer(SurfaceFlinger* flinger, const sp<Client>& client,
         mSecure(false),
         mProtectedByApp(false),
         mHasSurface(false),
-        mClientRef(client),
-        mIsBootAnimation(false),
-        mIsQuickBootAnimation(false)
+        mClientRef(client)
 {
     mCurrentCrop.makeInvalid();
     mFlinger->getRenderEngine().genTextures(1, &mTextureName);
@@ -135,12 +133,6 @@ void Layer::onFirstRef() {
 
     const sp<const DisplayDevice> hw(mFlinger->getDefaultDisplayDevice());
     updateTransformHint(hw);
-    mIsBootAnimation =  (0 == strcmp(mName.string(),"BootAnimation"));
-    if(mIsBootAnimation){
-         mBootAnimTr = hw->getTransform();
-    }
-
-    mIsQuickBootAnimation =  (0 == strcmp(mName.string(),"qbd"));
 }
 
 Layer::~Layer() {
@@ -730,12 +722,8 @@ bool Layer::isVideoHole() const
 void Layer::computeGeometry(const sp<const DisplayDevice>& hw, Mesh& mesh) const
 {
     const Layer::State& s(getDrawingState());
-    //const Transform tr(hw->getTransform() * s.transform);
-    //Don`t transform for BootAnimation
-    //const Transform tr( !mIsBootAnimation ? (hw->getTransform()*s.transform) : (s.transform*mBootAnimTr));
-    const Transform tr( mIsQuickBootAnimation ? s.transform : ( !mIsBootAnimation ? (hw->getTransform()*s.transform) : (s.transform*mBootAnimTr) ) );
+    const Transform tr(hw->getTransform() * s.transform);
     const uint32_t hw_h = hw->getHeight();
-    const uint32_t hw_w = hw->getWidth();
     Rect win(s.active.w, s.active.h);
     if (!s.active.crop.isEmpty()) {
         win.intersect(s.active.crop, &win);
