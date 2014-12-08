@@ -758,23 +758,8 @@ status_t SurfaceFlinger::getDisplayInfo(const sp<IBinder>& display, DisplayInfo*
         info->orientation = 0;
     }
 
-    char valuep[PROPERTY_VALUE_MAX];
-    property_get("const.window.w", valuep, "0") ;    
-    windowWidth = atoi(valuep)>0? atoi(valuep): hwc.getWidth(type); 
-    property_get("const.window.h", valuep, "0") ;    
-    windowHeight = atoi(valuep)>0? atoi(valuep): hwc.getHeight(type);
-    if((windowWidth != (int)(hwc.getWidth(type))) || (windowHeight != (int)(hwc.getHeight(type)))){
-        windowSize = true;	
-    }else{
-        windowSize = false;
-    }
-    if(windowSize){
-        info->w = windowWidth;
-        info->h = windowHeight;
-    }else{
-        info->w = hwc.getWidth(type);
-        info->h = hwc.getHeight(type);
-    }
+    info->w = hwc.getWidth(type);
+    info->h = hwc.getHeight(type);
     info->xdpi = xdpi;
     info->ydpi = ydpi;
     info->fps = float(1e9 / hwc.getRefreshPeriod(type));
