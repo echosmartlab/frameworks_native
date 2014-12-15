@@ -375,10 +375,6 @@ private:
     // Set to true once we've returned this surface's handle
     mutable bool mHasSurface;
     const wp<Client> mClientRef;
-
-    bool mIsBootAnimation;
-    bool mIsQuickBootAnimation;
-    Transform mBootAnimTr;
 };
 
 // ---------------------------------------------------------------------------
