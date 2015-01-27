@@ -48,23 +48,10 @@ int main(int argc, char* const argv[])
         services.sort(sort_func);
         args.add(String16("-a"));
     } else {
-    	 if((argc == 2) && 0 == strcmp(argv[1], "list")){
-	 	services = sm->listServices();
-		services.sort(sort_func);
-		const size_t N = services.size();
-	       aout << "Currently running services:" << endl;
-    
-		for (size_t i=0; i<N; i++) {
-		     aout << "  " << services[i] << endl;
-		}
-		return 0;
-	  }
-	 else{
-	        services.add(String16(argv[1]));
-	        for (int i=2; i<argc; i++) {
-	            args.add(String16(argv[i]));
-	        }
-	 }
+        services.add(String16(argv[1]));
+        for (int i=2; i<argc; i++) {
+            args.add(String16(argv[i]));
+        }
     }
 
     const size_t N = services.size();
