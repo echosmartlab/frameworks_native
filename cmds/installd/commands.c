@@ -731,7 +731,7 @@ static void run_dex2oat(int zip_fd, int oat_fd, const char* input_file_name,
 
     char disable_instaboot[PROPERTY_VALUE_MAX] = {0};
     property_get("config.disable_instaboot", disable_instaboot, "true");
-    bool have_norelocate = (strcmp(disable_instaboot, "false") == 0);
+    bool have_norelocate = (strcmp(disable_instaboot, "false") == 0) && !access("/system/bin/instabootserver", F_OK);
     static const char* NORELOCATE_ARG = "-Xnorelocate";
 
     static const char* DEX2OAT_BIN = "/system/bin/dex2oat";
