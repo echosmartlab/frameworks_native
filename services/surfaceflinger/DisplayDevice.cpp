@@ -117,17 +117,8 @@ DisplayDevice::DisplayDevice(
         config = RenderEngine::chooseEglConfig(display, format);
     }
     surface = eglCreateWindowSurface(display, config, window, NULL);
-    eglQuerySurface(display, surface, EGL_WIDTH,  &mFBWidth);
-    eglQuerySurface(display, surface, EGL_HEIGHT, &mFBHeight);
-
-
-    //get visible display size
-    getDisplayWH(&mDisplayWidth, &mDisplayHeight);
-    if (mDisplayWidth == 0 || mDisplayHeight == 0
-            || mType == DisplayDevice::DISPLAY_VIRTUAL) {
-        mDisplayWidth = mFBWidth;
-        mDisplayHeight = mFBHeight;
-    }
+    eglQuerySurface(display, surface, EGL_WIDTH,  &mDisplayWidth);
+    eglQuerySurface(display, surface, EGL_HEIGHT, &mDisplayHeight);
 
     // Make sure that composition can never be stalled by a virtual display
     // consumer that isn't processing buffers fast enough. We have to do this
@@ -321,25 +312,11 @@ EGLBoolean DisplayDevice::makeCurrent(EGLDisplay dpy, EGLContext ctx) const {
 }
 
 void DisplayDevice::setViewportAndProjection() const {
-    int w,h,x,y;
-
-    if (mFullViewPort && mFBWidth) {
-        //should with valid FB size
-        x = 0;
-        y = 0;
-        w = mFBWidth;
-        h = mFBHeight;
-    } else {
-        //show at the top-left corn
-        x = 0;
-        y = mFBHeight - mDisplayHeight;
-        w = mDisplayWidth;
-        h = mDisplayHeight;
-    }
+    size_t w = mDisplayWidth;
+    size_t h = mDisplayHeight;
     Rect sourceCrop(0, 0, w, h);
-
-    mFlinger->getRenderEngine().setViewportAndProjectionWithOffset(x, y, w, h, sourceCrop, h,
-                false, Transform::ROT_0);
+    mFlinger->getRenderEngine().setViewportAndProjection(w, h, sourceCrop, h,
+        false, Transform::ROT_0);
 }
 
 void DisplayDevice::useFullViewPort(bool bUseFullViewPort) const {
@@ -484,7 +461,6 @@ void DisplayDevice::setProjection(int orientation,
     const int h = mDisplayHeight;
 
     Transform R;
-    orientation = (orientation+(mScreenRotation/90))%4;
     DisplayDevice::orientationToTransfrom(orientation, w, h, &R);
 
     if (!frame.isValid()) {
