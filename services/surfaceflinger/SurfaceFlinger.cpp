@@ -617,17 +617,8 @@ status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
             info.orientation = 0;
         }
 
-        getDisplayWH((int*)&(info.w),(int*)&(info.h));
-        if (info.w == 0 || info.h == 0) {
-            info.w = hwConfig.width;
-            info.h = hwConfig.height;
-        }
-
-        int rotation = getDisplayHwRotation(type);
-        if (rotation == 90 || rotation == 270) {
-            swap(info.w,info.h);
-        }
-
+        info.w = hwConfig.width;
+        info.h = hwConfig.height;
         info.xdpi = xdpi;
         info.ydpi = ydpi;
         info.fps = float(1e9 / hwConfig.refresh);
