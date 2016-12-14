@@ -723,15 +723,6 @@ enum {
     AKEYCODE_NAVIGATE_NEXT   = 261,
     AKEYCODE_NAVIGATE_IN     = 262,
     AKEYCODE_NAVIGATE_OUT    = 263,
-    /** Primary stem key for Wear
-     * Main power/reset button on watch. */
-    AKEYCODE_STEM_PRIMARY = 264,
-    /** Generic stem key 1 for Wear */
-    AKEYCODE_STEM_1 = 265,
-    /** Generic stem key 2 for Wear */
-    AKEYCODE_STEM_2 = 266,
-    /** Generic stem key 3 for Wear */
-    AKEYCODE_STEM_3 = 267,
     AKEYCODE_MEDIA_SKIP_FORWARD = 272,
     AKEYCODE_MEDIA_SKIP_BACKWARD = 273,
     AKEYCODE_MEDIA_STEP_FORWARD = 274,
