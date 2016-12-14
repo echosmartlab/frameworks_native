@@ -47,7 +47,6 @@ static char screenshot_path[PATH_MAX] = "";
 
 #define PSTORE_LAST_KMSG "/sys/fs/pstore/console-ramoops"
 
-#define RAFT_DIR "/data/misc/raft/"
 #define TOMBSTONE_DIR "/data/tombstones"
 #define TOMBSTONE_FILE_PREFIX TOMBSTONE_DIR "/tombstone_"
 /* Can accomodate a tombstone number up to 9999. */
@@ -350,8 +349,6 @@ static void dumpstate() {
     run_command("RADIO LOG", timeout / 1000, "logcat", "-b", "radio", "-v", "threadtime", "-d", "*:v", NULL);
 
     run_command("LOG STATISTICS", 10, "logcat", "-b", "all", "-S", NULL);
-
-    run_command("RAFT LOGS", 300, SU_PATH, "root", "logcompressor", "-r", RAFT_DIR, NULL);
 
     /* show the traces we collected in main(), if that was done */
     if (dump_traces_path != NULL) {
