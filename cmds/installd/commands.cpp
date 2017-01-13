@@ -807,11 +807,6 @@ static void run_dex2oat(int zip_fd, int oat_fd, const char* input_file_name,
                              (strcmp(vold_decrypt, "trigger_restart_min_framework") == 0 ||
                              (strcmp(vold_decrypt, "1") == 0)));
 
-    char disable_instaboot[PROPERTY_VALUE_MAX] = {0};
-    property_get("config.disable_instaboot", disable_instaboot, "true");
-    bool have_norelocate = (strcmp(disable_instaboot, "false") == 0);
-    static const char* NORELOCATE_ARG = "-Xnorelocate";
-
     bool use_jit = check_boolean_property("debug.usejit");
     bool generate_debug_info = check_boolean_property("debug.generate-debug-info");
 
@@ -944,10 +939,6 @@ static void run_dex2oat(int zip_fd, int oat_fd, const char* input_file_name,
     }
     if (have_dex2oat_swap_fd) {
         argv[i++] = dex2oat_swap_fd;
-    }
-    if (have_norelocate) {
-       argv[i++] = (char*)RUNTIME_ARG;
-       argv[i++] = (char*)NORELOCATE_ARG;
     }
     if (generate_debug_info) {
         argv[i++] = "--generate-debug-info";
