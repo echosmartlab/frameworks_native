@@ -45,6 +45,7 @@
 #include "InputReader.h"
 
 #include <cutils/log.h>
+#include <cutils/properties.h>
 #include <input/Keyboard.h>
 #include <input/VirtualKeyMap.h>
 
@@ -3164,6 +3165,14 @@ void TouchInputMapper::configureSurface(nsecs_t when, bool* outResetNeeded) {
             int32_t naturalPhysicalWidth, naturalPhysicalHeight;
             int32_t naturalPhysicalLeft, naturalPhysicalTop;
             int32_t naturalDeviceWidth, naturalDeviceHeight;
+            ALOGD("mViewport.orientation = %d", mViewport.orientation);
+            char prop_value[PROPERTY_VALUE_MAX];
+            property_get("touchscreen.reverse", prop_value, "false");
+            if (strcmp(prop_value, "true") == 0) {
+                mViewport.orientation += 2;
+                mViewport.orientation %= 4;
+            }
+            ALOGD("mViewport.orientation = %d", mViewport.orientation);
             switch (mViewport.orientation) {
             case DISPLAY_ORIENTATION_90:
                 naturalLogicalWidth = mViewport.logicalBottom - mViewport.logicalTop;
