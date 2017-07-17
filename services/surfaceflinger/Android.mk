@@ -60,26 +60,12 @@ RK_VR := 0
 endif
 LOCAL_CFLAGS += -DRK_VR=$(RK_VR)
 
-ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3366)
-        LOCAL_CFLAGS += -DSF_RK3366
-endif
 ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3399)
         LOCAL_CFLAGS +=  -DSF_RK3399
-endif
-ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk322x)
-        LOCAL_CFLAGS +=  -DSF_RK322X
-endif
-
-ifeq ($(strip $(TARGET_BOARD_PLATFORM)),sofia3gr)
-LOCAL_CFLAGS += -DUSE_X86
 endif
 
 ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk30xxb)
     LOCAL_CFLAGS += -DTARGET_BOARD_PLATFORM_RK30XXB
-endif
-
-ifeq ($(strip $(TARGET_BOARD_PLATFORM_GPU)),G6110)
-        LOCAL_CFLAGS += -DGPU_G6110
 endif
 
 ifeq ($(strip $(BOARD_USE_DRM)),true)
@@ -89,11 +75,7 @@ RK_NV12_10_TO_NV12_BY_RGA = 1
 else
 RK_USE_DRM = 0
 RK_USE_3_FB = 0
-ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3328)
-RK_NV12_10_TO_NV12_BY_RGA = 1
-else
 RK_NV12_10_TO_NV12_BY_RGA = 0
-endif
 endif
 RK_HDR = 0
 LOCAL_CFLAGS += -DRK_USE_DRM=$(RK_USE_DRM) -DRK_USE_3_FB=$(RK_USE_3_FB) -DRK_USE_3_LAYER_BUFFER=1 \
