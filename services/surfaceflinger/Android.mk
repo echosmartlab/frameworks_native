@@ -53,13 +53,6 @@ ifeq ($(RK_SUPPORT),1)
 RK_STEREO := 1
 LOCAL_CFLAGS += -DRK_STEREO=$(RK_STEREO)
 
-ifeq ($(strip $(TARGET_BOARD_PLATFORM_PRODUCT)),vr)
-RK_VR := 1
-else
-RK_VR := 0
-endif
-LOCAL_CFLAGS += -DRK_VR=$(RK_VR)
-
 ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3399)
         LOCAL_CFLAGS +=  -DSF_RK3399
 endif

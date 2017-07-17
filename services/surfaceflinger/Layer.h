@@ -89,10 +89,6 @@ public:
     int32_t displayStereo;
 #endif
 
-#if RK_VR
-    mutable int mStereoMode;
-#endif
-
     enum { // flags for doTransaction()
         eDontUpdateGeometryState = 0x00000001,
         eVisibleRegion = 0x00000002,
@@ -272,13 +268,6 @@ public:
     void initDisplayStereo(void);
 #endif
 
-#if RK_VR
-    bool isFullScreen(const sp<const DisplayDevice>& hw,
-            HWComposer::HWCLayerInterface& layer);
-    bool isFBRLayer();
-    int getStereoModeToDraw()const;
-    void setAlreadyStereo(HWComposer::HWCLayerInterface& layer,int flag);
-#endif
     Rect getPosition(const sp<const DisplayDevice>& hw);
 #endif
 

@@ -100,7 +100,7 @@ public:
             const sp<DisplaySurface>& displaySurface,
             const sp<IGraphicBufferProducer>& producer,
             EGLConfig config
-#if !RK_VR & RK_HW_ROTATION
+#if RK_HW_ROTATION
             ,int hardwareOrientation    // orientation_of_pre_rotated_display
 #endif
             );
@@ -272,7 +272,6 @@ private:
      * 待显示的 layer_stack 以 display_saw_by_sf_clients 为基准的 orientation.
      */
     int mClientOrientation;
-#if !RK_VR
     /**
      * .DP : orientation_of_pre_rotated_display : 
      * display_pre_rotation_extension 引入的, 
@@ -287,7 +286,6 @@ private:
      * 只可能在 primary_display 中实际使用. 
      */
     int mHardwareOrientation;
-#endif
 #endif
     static uint32_t sPrimaryDisplayOrientation;
     // user-provided visible area of the layer stack
