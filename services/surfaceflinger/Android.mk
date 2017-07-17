@@ -57,10 +57,6 @@ ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk3399)
         LOCAL_CFLAGS +=  -DSF_RK3399
 endif
 
-ifeq ($(strip $(TARGET_BOARD_PLATFORM)),rk30xxb)
-    LOCAL_CFLAGS += -DTARGET_BOARD_PLATFORM_RK30XXB
-endif
-
 ifeq ($(strip $(BOARD_USE_DRM)),true)
 RK_USE_DRM = 1
 RK_USE_3_FB = 1
