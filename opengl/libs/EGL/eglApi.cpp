@@ -1792,18 +1792,12 @@ EGLClientBuffer eglGetRenderBufferANDROID(EGLDisplay dpy, EGLSurface draw)
 }
 EGLBoolean eglRenderBufferModifiedANDROID(EGLDisplay dpy, EGLSurface draw){
     clearError();
-#ifdef USE_IN_RK3288
-    dpy = dpy;
-    draw = draw;
-    gUnNeedSwap = 1;
-#else
     egl_display_ptr  const dp = get_display(dpy);
     egl_surface_t const * const s = get_surface(draw);
     if (s->cnx->egl.eglRenderBufferModifiedANDROID) {
             return s->cnx->egl.eglRenderBufferModifiedANDROID(
                         dp->disp.dpy, s->surface);
     }
-#endif
     return EGL_TRUE;
 }
 void eglSetImplementationAndroid(EGLBoolean impl)

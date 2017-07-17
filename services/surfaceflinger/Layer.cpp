@@ -60,13 +60,13 @@
 #define UN_NEED_GL
 #include <RockchipRga.h>
 #endif
-#if (RK_NV12_10_TO_NV12_BY_NENO | RK_HDR)
+#if RK_HDR
 #include <dlfcn.h>
 #endif
 #define DEBUG_RESIZE    0
 
 namespace android {
-#if (RK_NV12_10_TO_NV12_BY_RGA | RK_NV12_10_TO_NV12_BY_NENO | RK_HDR)
+#if (RK_NV12_10_TO_NV12_BY_RGA | RK_HDR)
 typedef struct
 {
      sp<GraphicBuffer> yuvTexBuffer;
@@ -531,9 +531,7 @@ static int openDvfsNode()
 {
     int fd_dvfs = -1;
 
-#ifdef SF_RK3288
-        fd_dvfs = open("/sys/devices/ffa30000.gpu/dvfs", O_RDWR, 0);
-#elif SF_RK3399
+#ifdef SF_RK3399
         fd_dvfs = open("/sys/devices/platform/ff9a0000.gpu/devfreq/ff9a0000.gpu/governor", O_RDWR, 0);
 #else
         fd_dvfs = -1;
@@ -607,15 +605,7 @@ static void optimizationDvfs(int on) {
         return;
     }
 
-#ifdef SF_RK3288
-    if (on) {
-        sprintf(value, "on");
-        ret = write(fd, value, sizeof(value));
-    } else {
-        sprintf(value, "off");
-        ret = write(fd, value, sizeof(value));
-    }
-#elif SF_RK3399
+#ifdef SF_RK3399
     if (on) {
         sprintf(value, "performance");
         ret = write(fd, value, sizeof(value));
@@ -1118,7 +1108,7 @@ void Layer::draw(const sp<const DisplayDevice>& hw) const {
     onDraw(hw, Region(hw->bounds()), false);
 }
 
-#if (RK_NV12_10_TO_NV12_BY_RGA | RK_NV12_10_TO_NV12_BY_NENO | RK_HDR)
+#if (RK_NV12_10_TO_NV12_BY_RGA | RK_HDR)
 /* print time macros. */
 #define PRINT_TIME_START        \
     struct timeval tpend1, tpend2;\
@@ -1196,19 +1186,6 @@ typedef void (*__rockchipxxx)(u8 *src, u8 *dst, int w, int h, int srcStride, int
 static void* dso = NULL;
 static __rockchipxxx rockchipxxx = NULL;
 
-#elif RK_NV12_10_TO_NV12_BY_NENO
-
-typedef unsigned char u8;
-typedef unsigned short u16;
-typedef unsigned int u32;
-typedef signed char s8;
-typedef signed short s16;
-typedef signed int s32;
-#define RK_XXX_PATH         "/system/lib/librockchipxxx.so"
-typedef void (*__rockchipxxx3288)(u8 *src, u8 *dst, int w, int h, int srcStride, int dstStride, int area);
-
-static void* dso = NULL;
-static __rockchipxxx3288 rockchipxxx3288 = NULL;
 #endif
 
 void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
@@ -1248,14 +1225,14 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
     // Bind the current buffer to the GL texture, and wait for it to be
     // ready for us to draw into.
     status_t err = NO_ERROR;
-#if (RK_NV12_10_TO_NV12_BY_RGA | RK_NV12_10_TO_NV12_BY_NENO | RK_HDR)
+#if (RK_NV12_10_TO_NV12_BY_RGA | RK_HDR)
     if(mActiveBuffer != NULL &&
        mActiveBuffer->getPixelFormat() == HAL_PIXEL_FORMAT_YCrCb_NV12_10 )
     {
 #if RK_HDR
         const int yuvTexUsage = GraphicBuffer::USAGE_HW_TEXTURE | ARM_P010;
         const int yuvTexFormat = HAL_PIXEL_FORMAT_YCrCb_NV12_10;
-#elif (RK_NV12_10_TO_NV12_BY_NENO | RK_NV12_10_TO_NV12_BY_RGA)
+#elif RK_NV12_10_TO_NV12_BY_RGA
         const int yuvTexUsage = GraphicBuffer::USAGE_HW_TEXTURE;
         const int yuvTexFormat = HAL_PIXEL_FORMAT_YCrCb_NV12;
 #endif
@@ -1263,7 +1240,7 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
         int yuvIndex ;
         yuvcnt ++;
         yuvIndex = yuvcnt%2;
-#if (RK_HDR | RK_NV12_10_TO_NV12_BY_NENO)
+#if RK_HDR
         int src_l,src_t,src_r,src_b,src_stride;
         void *src_vaddr;
         void *dst_vaddr;
@@ -1297,7 +1274,7 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
             }
         }
 
-#if (RK_HDR | RK_NV12_10_TO_NV12_BY_NENO)
+#if RK_HDR
         mActiveBuffer->lock(GRALLOC_USAGE_SW_READ_OFTEN,&src_vaddr);
         yuvTeximg[yuvIndex].yuvTexBuffer->lock(GRALLOC_USAGE_SW_WRITE_OFTEN,&dst_vaddr);
 
@@ -1320,16 +1297,6 @@ void Layer::onDraw(const sp<const DisplayDevice>& hw, const Region& clip,
             return;
         }
         rockchipxxx((u8*)src_vaddr, (u8*)dst_vaddr, src_r - src_l, src_b - src_t, src_stride, (src_r - src_l)*2, 0);
-#elif RK_NV12_10_TO_NV12_BY_NENO
-        if(rockchipxxx3288 == NULL)
-            rockchipxxx3288 = (__rockchipxxx3288)dlsym(dso, "_Z15rockchipxxx3288PhS_iiiii");
-        if(rockchipxxx3288 == NULL)
-        {
-            ALOGE("rk_debug can't not find target function in /system/lib64/librockchipxxx.so ! \n");
-            dlclose(dso);
-            return;
-        }
-        rockchipxxx3288((u8*)src_vaddr, (u8*)dst_vaddr, src_r - src_l, src_b - src_t, src_stride, (src_r - src_l), 0);
 #endif
         //PRINT_TIME_END("convert10to16_highbit_arm64_neon")
         ALOGV("src_vaddr=%p,dst_vaddr=%p,crop_w=%d,crop_h=%d,stride=%f, src_stride=%d,raw_w=%d,raw_h=%d",
