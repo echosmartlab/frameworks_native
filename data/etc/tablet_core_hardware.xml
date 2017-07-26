@@ -51,8 +51,6 @@
     <feature name="android.software.managed_users" />
 
     <feature name="android.hardware.wifi" />
-    <feature name="android.hardware.wifi.direct" />
-
 
     <feature name="android.hardware.camera.any" />
     <feature name="android.hardware.camera" />
