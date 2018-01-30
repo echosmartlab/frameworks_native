@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+// #define ENABLE_DEBUG_LOG
+#include <log/custom_log.h>
+
 #include <inttypes.h>
 #include <math.h>
 #include <stdint.h>
@@ -138,6 +141,26 @@ ssize_t SensorDevice::poll(sensors_event_t* buffer, size_t count) {
     do {
         c = mSensorDevice->poll(reinterpret_cast<struct sensors_poll_device_t *> (mSensorDevice),
                                 buffer, count);
+
+        for ( size_t i = 0; i < count; i++ )
+        {
+            sensors_event_t* event = &(buffer[i]);
+
+            /* 若当前 event 来自 accelerometer_sensor, 则... */
+            if ( SENSOR_TYPE_ACCELEROMETER == event->type )
+            {
+                /* 根据当前的 pre_rotation 调整 data_from_acce_sensor. */
+                transformDataFromAcceSensorForPreRotation(event);
+                // .KP : 本操作的前提条件是 accelerometer sensor 数据在 original_display 下(无 pre_rotation) 调校正确.
+
+                D("after prerotation, type : %d, x : %f, y : %f, z : %f", event->type,
+                  event->acceleration.v[0],
+                  event->acceleration.v[1],
+                  event->acceleration.v[2]);
+
+                break;
+            }
+        }
     } while (c == -EINTR);
     return c;
 }
