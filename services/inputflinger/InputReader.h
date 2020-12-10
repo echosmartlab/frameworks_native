@@ -34,6 +34,7 @@
 #include <utils/RefBase.h>
 #include <utils/BitSet.h>
 #include <utils/SortedVector.h>
+#include <cutils/properties.h>
 
 #include <stddef.h>
 #include <unistd.h>
@@ -1190,6 +1191,16 @@ private:
 
     float mVWheelScale;
     float mHWheelScale;
+
+    int32_t mCountWheelBtn;
+    int32_t mFirstPointerX;
+    int32_t mFirstPointerY;
+    int32_t mSecondPointerX;
+    int32_t mSecondPointerY;
+    int32_t mMaxPointerX;
+    int32_t mMaxPointerY;
+    bool mIsZoomState;
+    int32_t mFd;
 
     // Velocity controls for mouse pointer and wheel movements.
     // The controls for X and Y wheel movements are separate to keep them decoupled.

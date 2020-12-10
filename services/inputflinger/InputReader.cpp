@@ -43,6 +43,7 @@
 #define DEBUG_STYLUS_FUSION 0
 
 #include "InputReader.h"
+#include "UinputDev.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -2579,9 +2580,13 @@ void KeyboardInputMapper::updateLedStateForModifier(LedState& ledState,
 
 CursorInputMapper::CursorInputMapper(InputDevice* device) :
         InputMapper(device) {
+    mCountWheelBtn = 0;
+    mIsZoomState = false;
+    mFd = -1;
 }
 
 CursorInputMapper::~CursorInputMapper() {
+    close_touch_device(mFd);
 }
 
 uint32_t CursorInputMapper::getSources() {
@@ -2781,12 +2786,121 @@ void CursorInputMapper::process(const RawEvent* rawEvent) {
     if (rawEvent->type == EV_SYN && rawEvent->code == SYN_REPORT) {
         sync(rawEvent->when);
     }
+
+    if (mIsZoomState && rawEvent->code == REL_WHEEL) {
+        if (rawEvent->value == 1) {
+
+            if (mSecondPointerX < mMaxPointerX - 10) {
+                setPointers(mFd, mFirstPointerX, mFirstPointerY, mSecondPointerX += 10, mSecondPointerY);
+            }
+        } else {
+
+            if (mSecondPointerX > mFirstPointerX + 10) {
+                setPointers(mFd, mFirstPointerX, mFirstPointerY, mSecondPointerX -= 10, mSecondPointerY);
+            }
+        }
+    }
 }
 
 void CursorInputMapper::sync(nsecs_t when) {
     int32_t lastButtonState = mButtonState;
     int32_t currentButtonState = mCursorButtonAccumulator.getButtonState();
     mButtonState = currentButtonState;
+
+    //codewalker
+    if (mButtonState & AMOTION_EVENT_BUTTON_TERTIARY) {
+        mCountWheelBtn = 1;
+    }
+
+    if (mIsZoomState && (mButtonState & AMOTION_EVENT_BUTTON_PRIMARY ||
+                    mButtonState & AMOTION_EVENT_BUTTON_BACK)) {
+        mCountWheelBtn = 2;
+        mButtonState |= AMOTION_EVENT_BUTTON_TERTIARY;
+    }
+
+    if (mButtonState & AMOTION_EVENT_BUTTON_TERTIARY) {
+        if (mCountWheelBtn == 2) {
+
+            {
+                mCountWheelBtn = 0;
+                mIsZoomState = false;
+                releasePointers(mFd);
+                property_set("sys.showtouch", "0");
+            }
+        } else if (mCountWheelBtn == 1 && !mIsZoomState) {
+            mIsZoomState = true;
+            property_set("sys.showtouch", "1");
+            callinput(24, 1018);
+
+            int32_t orientation = 0;
+            float minX, minY, maxX, maxY;
+            float x, y;
+
+            InputReaderConfiguration config;
+            getPolicy()->getReaderConfiguration(&config);
+            DisplayViewport viewport;
+            if (config.getDisplayViewport(ViewportType::VIEWPORT_INTERNAL, NULL, &viewport)) {
+                orientation = viewport.orientation;
+//                ALOGI("MNG viewport->orientation (%d)  mOrientation (%d) showtouches (%d)", viewport.orientation, mOrientation, config.showTouches);
+            }
+
+            orientation = (orientation + sf_getrotation()) %4;
+
+            mPointerController->getBounds(&minX, &minY, &maxX, &maxY);
+
+            if (orientation == DISPLAY_ORIENTATION_90 || orientation == DISPLAY_ORIENTATION_270) {
+                mMaxPointerX = maxY;
+                mMaxPointerY = maxX;
+            } else {
+                mMaxPointerX = maxX;
+                mMaxPointerY = maxY;
+            }
+
+//            ALOGI("MNG getBounds (%f / %f / %f / %f)", minX, minY, maxX, maxY);
+
+            if (mFd < 0) {
+                mFd = init_touch_device(mMaxPointerX, mMaxPointerY);
+            }
+
+            mPointerController->getPosition(&x, &y);
+
+            switch (orientation) {
+                case DISPLAY_ORIENTATION_0:
+                    mFirstPointerX = x;
+                    mFirstPointerY = y;
+                    break;
+                case DISPLAY_ORIENTATION_90:
+                    mFirstPointerY = x;
+                    mFirstPointerX = mMaxPointerX - y;
+                    break;
+                case DISPLAY_ORIENTATION_180:
+                    mFirstPointerX = mMaxPointerX - x;
+                    mFirstPointerY = mMaxPointerY - y;
+                    break;
+                case DISPLAY_ORIENTATION_270:
+                    mFirstPointerX = y;
+                    mFirstPointerY = mMaxPointerY - x;
+                    break;
+            }
+
+//            ALOGI("MNG x = %f, y = %f", x, y);
+//            ALOGI("MNG mFirstPointerX = %d, mFirstPointerY = %d", mFirstPointerX, mFirstPointerY);
+            {
+
+                mSecondPointerX = mFirstPointerX + 150;
+                mSecondPointerY = mFirstPointerY;
+
+            }
+
+        }
+
+        return;
+    }
+
+
+    if (mIsZoomState) {
+        return;
+    }
 
     bool wasDown = isPointerDown(lastButtonState);
     bool down = isPointerDown(currentButtonState);
@@ -3547,6 +3661,8 @@ void TouchInputMapper::configureSurface(nsecs_t when, bool* outResetNeeded) {
     bool viewportChanged = mViewport != newViewport;
     if (viewportChanged) {
         mViewport = newViewport;
+
+        mViewport.orientation = (mViewport.orientation + sf_getrotation()) %4;
 
         if (mDeviceMode == DEVICE_MODE_DIRECT || mDeviceMode == DEVICE_MODE_POINTER) {
             // Convert rotated viewport to natural surface coordinates.

@@ -21,6 +21,7 @@ cc_library_shared {
         "InputDispatcher.cpp",
         "InputListener.cpp",
         "InputManager.cpp",
+        "UinputDev.cpp",
         "InputReader.cpp",
         "InputWindow.cpp",
     ],
