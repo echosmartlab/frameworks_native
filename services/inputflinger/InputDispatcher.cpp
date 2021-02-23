@@ -70,28 +70,28 @@ namespace android {
 
 // Default input dispatching timeout if there is no focused application or paused window
 // from which to determine an appropriate dispatching timeout.
-constexpr nsecs_t DEFAULT_INPUT_DISPATCHING_TIMEOUT = 5000 * 1000000LL; // 5 sec
+constexpr nsecs_t DEFAULT_INPUT_DISPATCHING_TIMEOUT = 60000 * 1000000LL; // 5 sec
 
 // Amount of time to allow for all pending events to be processed when an app switch
 // key is on the way.  This is used to preempt input dispatch and drop input events
 // when an application takes too long to respond and the user has pressed an app switch key.
-constexpr nsecs_t APP_SWITCH_TIMEOUT = 500 * 1000000LL; // 0.5sec
+constexpr nsecs_t APP_SWITCH_TIMEOUT = 5000 * 1000000LL; // 0.5sec
 
 // Amount of time to allow for an event to be dispatched (measured since its eventTime)
 // before considering it stale and dropping it.
-constexpr nsecs_t STALE_EVENT_TIMEOUT = 10000 * 1000000LL; // 10sec
+constexpr nsecs_t STALE_EVENT_TIMEOUT = 100000 * 1000000LL; // 10sec
 
 // Amount of time to allow touch events to be streamed out to a connection before requiring
 // that the first event be finished.  This value extends the ANR timeout by the specified
 // amount.  For example, if streaming is allowed to get ahead by one second relative to the
 // queue of waiting unfinished events, then ANRs will similarly be delayed by one second.
-constexpr nsecs_t STREAM_AHEAD_EVENT_TIMEOUT = 500 * 1000000LL; // 0.5sec
+constexpr nsecs_t STREAM_AHEAD_EVENT_TIMEOUT = 5000 * 1000000LL; // 0.5sec
 
 // Log a warning when an event takes longer than this to process, even if an ANR does not occur.
-constexpr nsecs_t SLOW_EVENT_PROCESSING_WARNING_TIMEOUT = 2000 * 1000000LL; // 2sec
+constexpr nsecs_t SLOW_EVENT_PROCESSING_WARNING_TIMEOUT = 20000 * 1000000LL; // 2sec
 
 // Log a warning when an interception call takes longer than this to process.
-constexpr std::chrono::milliseconds SLOW_INTERCEPTION_THRESHOLD = 50ms;
+constexpr std::chrono::milliseconds SLOW_INTERCEPTION_THRESHOLD = 500ms;
 
 // Number of recent events to keep for debugging purposes.
 constexpr size_t RECENT_QUEUE_MAX_SIZE = 10;
